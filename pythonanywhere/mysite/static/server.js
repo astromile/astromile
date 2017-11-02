@@ -17,6 +17,8 @@ sendRequest = function (command, params, onLoad) {
 	var baseUrl = window.location.href
 	if (baseUrl.indexOf('localhost') >= 0) {
 		baseUrl = "http://127.0.0.1:5000"
+	} else {
+		baseUrl = baseUrl.substr(0, baseUrl.lastIndexOf('/'))
 	}
 	var url = baseUrl + '/' + command + '?' + str.join('&')
 	request.open('GET', url, true)

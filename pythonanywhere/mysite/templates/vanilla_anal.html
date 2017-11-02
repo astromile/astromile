@@ -3,35 +3,22 @@
 
 <head>
   <meta charset="utf-8">
-  <title>Online {{MODEL}} Analytic Vanilla Pricer</title>
+  <title>astrovue -O- {{MODEL}}</title>
   <meta name="author" content="astromile">
-  <meta name="description" content="Online {{MODEL}} Pricer">
+  <meta name="description" content="Online {{MODEL}} Analytical Pricer">
 
-  <script src="https://unpkg.com/vue"></script>
-  <script src="https://unpkg.com/http-vue-loader"></script>
-
-  <script src="{{url_for('static',filename='server.js')}}"></script>
-  <script src="{{url_for('static',filename='ui/handsontable.full.min.js')}}"></script>
-  <link rel="stylesheet" href="{{url_for('static',filename='ui/handsontable.full.min.css')}}">
-
-  <script src="{{url_for('static', filename='ui/d3.js')}}"></script>
-  <script src="{{url_for('static', filename='ui/mpld3.js')}}"></script>
 
 </head>
 
 <body>
 
-	<div id="app"></div>
+  <div id="app"></div>
 
-	<script>
-		var app = new Vue({
-			el:'#app',
-			template:'<option-pricer model="{{MODEL}}"></option-pricer>',
-			components : {
-					'option-pricer': httpVueLoader('static/option_pricer.vue')
-			}
-		})
-	</script>
+  <script>
+    var model = "{{MODEL}}"
+  </script>
+
+  <script src="{{url_for('static', filename='dist/build.js')}}"></script>
 
 </body>
 
