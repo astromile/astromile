@@ -7,7 +7,7 @@
 
 
 <script>
-module.exports = {
+export default {
 	name: 'ResultItem',
 	props: ['label','value','wlabel','wvalue', 'computed']
 }

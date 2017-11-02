@@ -6,10 +6,10 @@
 </template>
 
 <script>
-//import d3 from '../3rd-party/d3.js'
-//import mpld3 from '../3rd-party/mpld3.js'
+import d3 from './d3.js'
+import mpld3 from './mpld3.js'
 
-module.exports = {
+export default {
     name: 'MplD3Plot',
     props: {
         id: { type: String, required: true },

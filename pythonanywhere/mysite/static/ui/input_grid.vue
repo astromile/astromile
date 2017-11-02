@@ -8,7 +8,9 @@
 
 <script>
 
-module.exports = {
+import Handsontable from './handsontable.full.min.js'
+
+export default {
 	name: 'InputGrid',
 	props: ['id', 'params', 'xaxis'],
 	data: function(){
@@ -71,7 +73,7 @@ module.exports = {
 					}
 				}
 			}
-			const hot = Handsontable(container,settings)
+			const hot = new Handsontable(container,settings)
 			var colWidth = hot.getPlugin('autoColumnSize').getColumnWidth(0)
 			if(this.paramColWidth != colWidth){
 				this.paramColWidth = colWidth
@@ -88,4 +90,5 @@ module.exports = {
 		padding: 0;
 	}
 	
+	@import './handsontable.full.min.css'
 </style>

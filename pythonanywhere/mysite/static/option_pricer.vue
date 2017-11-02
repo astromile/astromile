@@ -33,7 +33,6 @@
     		<result-item :wlabel="wlabel" label="Call:" :wvalue="wvalue" :value="pv_call" :computed="pv_computed" ></result-item>
     		<result-item :wlabel="wlabel" label="Put:" :wvalue="wvalue" :value="pv_put" :computed="pv_computed"></result-item>
 		</div>
-
 		<div class="result-list">
 			<mpld3-plot id="pv_plot" :data="plot_data" :plotting="plotting"></mpld3-plot>
 		</div>
@@ -42,19 +41,12 @@
 
 <script>
 
-if(httpVueLoader){
-	var Entry = httpVueLoader('static/ui/entry.vue')
-	var ResultItem = httpVueLoader('static/ui/result_item.vue')
-	var InputGrid = httpVueLoader('static/ui/input_grid.vue')
-	var Mpld3Plot = httpVueLoader('static/ui/mpld3_plot.vue')
-}else{
-	eval("import Entry from './static/ui/entry.vue'")
-	eval("import ResultItem from './static/ui/result_item.vue'")
-	eval("import InputGrid from './static/ui/input_grid.vue'")
-	eval("import Mpld3Plot from './static/ui/mpld3_plot.vue'")
-}
+import './server.js'
+import ResultItem from './ui/result_item.vue'
+import InputGrid from './ui/input_grid.vue'
+import Mpld3Plot from './ui/mpld3_plot.vue'
 
-module.exports = {
+export default {
 	name: 'OptionPricer',
 	props: ['model'],
 	data: function(){
@@ -150,7 +142,7 @@ module.exports = {
 	    	if(pname in this){
 	    		this[pname] = v
 	    	}
-	        this.sendPriceRequest()
+	      this.sendPriceRequest()
 	    },
 	    onXAxisChange: function(xaxis) {
 	    	if(xaxis!=this.xaxis){
@@ -183,7 +175,7 @@ module.exports = {
 	                xaxis: this.xaxis
 	    	}
 	    	const vm = this
-	    	sendRequest('plot_data',params,function(res){
+	    	sendRequest((this.model=="Heston" ? 'heston' : 'bs') + '/plot_data',params,function(res){
 	    		vm.plotting = false
 	    		if(res.hasOwnProperty('error')){
 	    			console.log(res.error)
@@ -210,8 +202,8 @@ module.exports = {
                 xi: this.xi,
                 rho: this.rho
 	        }
-	        vm = this
-	        sendRequest('price_anal',params,function(res){
+	        const vm = this
+	        sendRequest((this.model=='Heston' ? 'heston' : 'bs')+'/price_anal',params,function(res){
 	            vm.pv_computed = true
 	            if(res.hasOwnProperty('error')){
 	                vm.pv_call = res.error
@@ -228,7 +220,7 @@ module.exports = {
 	    this.sendPlotRequest()
 	},
 	components: {
-		'entry': Entry,
+		//'entry': Entry,
 		'result-item': ResultItem,
 		'input-grid': InputGrid,
 		'mpld3-plot': Mpld3Plot

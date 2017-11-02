@@ -11,11 +11,14 @@ import matplotlib.pyplot as plt, mpld3
 
 from fin.heston import HestonLord, HestonParams
 
-
 app = Flask(__name__)
 
+# ## this is a dev hack to test with "npm run dev" of the client (js) side
+from flask_cors import CORS
+cors = CORS(app, origins=['http://localhost:8080'])
+
 ''' classical BS '''
-def bs_pv(spot,vol,r,q,strike,ttm,phi):
+def bs_pv(spot, vol, r, q, strike, ttm, phi):
     fwd = spot * np.exp((r-q)*ttm)
     df = np.exp(-r*ttm)
 
@@ -231,3 +234,5 @@ def heston_price_anal():
 def test_page():
     return render_template('test.html')
 
+if __name__=='__main__':
+    app.run()
