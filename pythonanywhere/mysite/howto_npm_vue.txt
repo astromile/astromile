@@ -1,0 +1,29 @@
+To create a vue project from scratch:
+
+1.	install vue-cli for easy initialization (if not yet installed):
+	
+	npm install --global vue-cli
+	
+	
+2.	init project folder: go to parent folder and enter
+	
+	vue init webpack my-project-name
+	
+	
+3.	go to parent folder/my-project-name
+	
+	cd my-project-name
+	
+4.	npm install
+
+5.	npm run dev 
+
+
+
+
+
+or to set-up existing project in a new location:
+
+1.	move existing package.json and webpack.config.js into the project folder
+2.	npm install
+3.	npr run dev

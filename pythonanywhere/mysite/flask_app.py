@@ -1,86 +1,190 @@
-
 # Flask app for pricing Vanillas in 'classical' models, e.g., BS, Heston, etc.
 
 from flask import Flask, render_template, request, json
+from flask_cors import CORS
 
-import datetime as dt
+#import datetime as dt
 import scipy.stats as st
 import numpy as np
 
-import matplotlib.pyplot as plt, mpld3
+import matplotlib.pyplot as plt
+import mpld3
 
-from fin.heston import HestonLord, HestonParams
-import fin.heston_calibration  as hcal
+from fin.heston import HestonLord, HestonParams, DeltaHelper
+import fin.heston_calibration as hcal
 
 app = Flask(__name__)
 
 # ## this is a dev hack to test with "npm run dev" the client (js) side
-from flask_cors import CORS
-cors = CORS(app, origins=['http://localhost:8080'])
+MY_CORS = CORS(app, origins=['http://localhost:8080'])
+
 
 ''' classical BS '''
-def bs_pv(spot, vol, r, q, strike, ttm, phi):
-    fwd = spot * np.exp((r-q)*ttm)
-    df = np.exp(-r*ttm)
 
-    std = vol*np.sqrt(ttm)
-    dp = np.log(fwd/strike)/std+std/2.
+
+def bs_pv(spot, vol, r, q, strike, ttm, phi):
+    fwd = spot * np.exp((r - q) * ttm)
+    df = np.exp(-r * ttm)
+
+    std = vol * np.sqrt(ttm)
+    dp = np.log(fwd / strike) / std + std / 2.
     dm = dp - std
 
-    return df * phi * (fwd * st.norm.cdf(phi*dp) - strike * st.norm.cdf(phi*dm))
+    return df * phi * (fwd * st.norm.cdf(phi * dp) - strike * st.norm.cdf(phi * dm))
+
 
 ''' heston analytical pricer based on CF integration '''
+
+
 def heston_pv(spot, var0, r, q, kappa, theta, xi, rho, strike, ttm, phi):
     params = HestonParams(spot, var0, r, q, kappa, theta, xi, rho)
     model = HestonLord(params)
 
     return model.vanilla(strike, ttm, phi)
 
+
+def tenor2ttm(tenor):
+    m = {'ON': 1. / 252,
+         '1W': 1. / 52,
+         '2W': 2. / 52,
+         '3W': 3. / 52,
+         '1M': 1. / 12,
+         '2M': 2. / 12,
+         '3M': 3. / 12,
+         '4M': 4. / 12,
+         '5M': 5. / 12,
+         '6M': 6. / 12,
+         '7M': 7. / 12,
+         '8M': 8. / 12,
+         '9M': 9. / 12,
+         '10M': 10. / 12,
+         '11M': 11. / 12,
+         '12M': 1.,
+         '1Y': 1.,
+         '2Y': 2.,
+         '3Y': 3.,
+         '4Y': 4.,
+         '5Y': 5.
+         }
+
+    return m[tenor]
+
+
 def heston_calibrate_to_single_smile(spot, input_quotes):
     t = []
     zrDom = []
-    fwd = []
-    
-    dfDomCurve = hcal.InterpolatedZeroCurve(hcal.LinearInterpolator(t,zrDom))
-    fxMarket = hcal.FxMarket(dfDomCurve,dfForCurve,fwdCurve)
-    calibrator = hcal.HestonCalibrator(fxMarket)
-    res = calibrator.calibrate_to_single_smile(ttm, strikes, vols)
+    fwdPoints = []
+    smiles = []
 
-@app.route('/',methods=['GET'])
+    for q in input_quotes:
+        ttm = tenor2ttm(q['tenor'])
+        df = float(q['df'])
+        fwd = float(q['fwd'])
+        rr25 = float(q['rr25']) / 100.
+        atm = float(q['atm']) / 100.
+        bf25 = float(q['bf25']) / 100.
+
+        t.append(ttm)
+        zrDom.append(-np.log(df) / ttm)
+        fwdPoints.append(fwd)
+        smiles.append([atm + bf25 - rr25 / 2.,
+                       atm,
+                       atm + bf25 + rr25 / 2.])
+
+    fwdPointsCurve = hcal.ForwardCurveFromLinearPoints(spot, t, fwdPoints)
+    dfDomCurve = hcal.InterpolatedZeroCurve(hcal.LinearInterpolator(t, zrDom))
+    dfForCurve = hcal.ForwardHelper.implyForeignCurve(
+        fwdPointsCurve, dfDomCurve)
+    fwdCurve = hcal.ForwardCurve(spot, dfDomCurve, dfForCurve)
+    fxMarket = hcal.FxMarket(dfDomCurve, dfForCurve, fwdCurve)
+    calibrator = hcal.HestonCalibrator(fxMarket)
+
+    smile = smiles[0]
+    premiumType = hcal.PremiumType.Excluded
+    deltaType = hcal.DeltaType.Forward if t[0] < 1. else hcal.DeltaType.Spot
+    quoteHelper = hcal.QuoteHelper(fxMarket,
+                                   deltaType,
+                                   premiumType)
+    strikes = [quoteHelper.strikeForDelta(t[0], -0.25, smile[0]),
+               quoteHelper.atmStrike(t[0], smile[1]),
+               quoteHelper.strikeForDelta(t[0], 0.25, smile[-1])]
+
+    hParams = calibrator.calibrate_to_single_smile(ttm, strikes, smile)
+
+    hestonMarket = hcal.HestonMarket(dfDomCurve, dfForCurve, fwdCurve, hParams)
+
+    figure, ax = plt.subplots()
+
+    k = np.linspace(strikes[0], strikes[-1])
+    modelVols = [hestonMarket.impl_vol(t[0], ki) for ki in k]
+    plt.plot(k, modelVols, '--', label='Heston implied vols')
+    plt.plot(strikes, smile, 'o', label='Input Quotes')
+    plt.title(
+        r'$v_0={0.var0:.6f} \kappa={0.kappa:.4f} \theta={0.theta:.6f} \xi={0.xi:4f} \rho={0.rho:4f}$'.format(hParams))
+
+    plt.legend(loc='best')
+
+    plotData = mpld3.fig_to_dict(figure)
+    plt.close()
+
+    result = {
+        'hestonParams': hParams,
+        'plotData': plotData
+    }
+    return result
+
+
+@app.route('/', methods=['GET'])
 def main_page():
     try:
         links = [
             {
-                'title':'Black-Scholes Vanilla Pricer',
-                'link' :'/bs'
+                'title': 'Black-Scholes Vanilla Pricer',
+                'link': '/bs'
             },
             {
-                'title':'Heston Vanilla Pricer',
-                'link' :'/heston'                
+                'title': 'Heston Vanilla Pricer',
+                'link': '/heston'
             },
             {
-                'title':'Heston Calibration to FX Surface',
-                'link' : '/heston/calibration'
+                'title': 'Heston Calibration to FX Surface',
+                'link': '/heston/calibration'
             }
-            ]
-        return render_template('index.html',links=links)
+        ]
+        return render_template('index.html', links=links)
     except Exception as e:
         return error_response(e)
 
-def error_response(e):
-    return json.dumps({'error':{
-            'type': str(type(e)),
-            'str': str(e),
-            'repr':repr(e),
-            'msg':e.message
-        }})
 
-@app.route('/bs',methods=['GET'])
+def error_response(e):
+    import sys
+    import os
+    exc_type, exc_obj, exc_tb = sys.exc_info()
+    fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+    line = exc_tb.tb_lineno
+    #print(exc_type, fname, exc_tb.tb_lineno)
+    return json.dumps({'error': {
+        'type': str(type(e)),
+        'str': str(e),
+        'repr': repr(e),
+        'msg': e.message,
+        'src': '{}@{}'.format(line, fname)}})
+
+
+class JsonifiableEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if hasattr(obj, 'jsonify'):
+            return obj.jsonify()
+        return json.JSONEncoder.default(self, obj)
+
+
+@app.route('/bs', methods=['GET'])
 def bs_render():
     try:
         return render_template('vanilla_anal.html', MODEL='Black-Scholes')
     except Exception as e:
         return error_response(e)
+
 
 @app.route('/heston')  # ,methods=['GET'])
 def heston_render():
@@ -89,6 +193,7 @@ def heston_render():
     except Exception as e:
         return error_response(e)
 
+
 @app.route('/heston/calibration')
 def heston_calibration_render():
     try:
@@ -96,20 +201,21 @@ def heston_calibration_render():
     except Exception as e:
         return error_response(e)
 
-@app.route('/heston/calibrate',methods=['GET'])
+
+@app.route('/heston/calibrate', methods=['GET'])
 def heston_calibrate():
     try:
         spot = float(request.args['spot'])
         input_quotes = json.loads(request.args['input_quotes'])
 
-        result={
-            'nbTenors':len(input_quotes)
-        }
-        return json.dumps(result)
+        result = heston_calibrate_to_single_smile(spot, input_quotes)
+
+        return json.dumps(result, cls=JsonifiableEncoder)
     except Exception as e:
         return error_response(e)
 
-@app.route('/bs/price_anal',methods=['GET'])
+
+@app.route('/bs/price_anal', methods=['GET'])
 def bs_price_anal():
     try:
         spot = float(request.args['spot'])
@@ -119,18 +225,19 @@ def bs_price_anal():
         strike = float(request.args['strike'])
         ttm = float(request.args['ttm'])
 
-        spotAnnualRange = spot * np.exp(vol*st.norm.ppf([0.005,0.995]))
-        call = bs_pv(spot,vol,r,q,strike,ttm,1.)
-        put = bs_pv(spot,vol,r,q,strike,ttm,-1.)
+        spotAnnualRange = spot * np.exp(vol * st.norm.ppf([0.005, 0.995]))
+        call = bs_pv(spot, vol, r, q, strike, ttm, 1.)
+        put = bs_pv(spot, vol, r, q, strike, ttm, -1.)
 
         result = {
-            'spot_annual_range_99':list(spotAnnualRange),
-            'pv_call':call,
-            'pv_put':put
-            }
+            'spot_annual_range_99': list(spotAnnualRange),
+            'pv_call': call,
+            'pv_put': put
+        }
         return json.dumps(result)
     except Exception as e:
         return error_response(e)
+
 
 @app.route('/bs/plot_data', methods=['GET'])
 def bs_plot_data():
@@ -152,30 +259,32 @@ def bs_plot_data():
 
         xrange = np.linspace(xrange[0], xrange[1])
         ycall = [bs_pv(x if xaxis == 'spot' else spot,
-                   x if xaxis == 'vol' else vol,
-                   x if xaxis == 'ir' else r,
-                   x if xaxis == 'dy' else q,
-                   x if xaxis == 'strike' else strike,
-                   x if xaxis == 'ttm' else ttm,
-                   1.) for x in xrange]
+                       x if xaxis == 'vol' else vol,
+                       x if xaxis == 'ir' else r,
+                       x if xaxis == 'dy' else q,
+                       x if xaxis == 'strike' else strike,
+                       x if xaxis == 'ttm' else ttm,
+                       1.) for x in xrange]
         yput = [bs_pv(x if xaxis == 'spot' else spot,
-                   x if xaxis == 'vol' else vol,
-                   x if xaxis == 'ir' else r,
-                   x if xaxis == 'dy' else q,
-                   x if xaxis == 'strike' else strike,
-                   x if xaxis == 'ttm' else ttm,
-                   - 1.) for x in xrange]
+                      x if xaxis == 'vol' else vol,
+                      x if xaxis == 'ir' else r,
+                      x if xaxis == 'dy' else q,
+                      x if xaxis == 'strike' else strike,
+                      x if xaxis == 'ttm' else ttm,
+                      - 1.) for x in xrange]
 
         figure, ax = plt.subplots()
 
         plt.plot(xrange, ycall, 'b', label='call')
-        plt.plot([float(request.args[xaxis])], [bs_pv(spot, vol, r, q, strike, ttm, 1.)], 'bo')
+        plt.plot([float(request.args[xaxis])], [
+                 bs_pv(spot, vol, r, q, strike, ttm, 1.)], 'bo')
         plt.plot(xrange, yput, '--g', label='put')
-        plt.plot([float(request.args[xaxis])], [bs_pv(spot, vol, r, q, strike, ttm, -1.)], 'go')
+        plt.plot([float(request.args[xaxis])], [
+                 bs_pv(spot, vol, r, q, strike, ttm, -1.)], 'go')
         plt.legend(loc='best')
         plt.title('Black-Scholes')
 
-        response = {'mpld3_data':mpld3.fig_to_dict(figure)}
+        response = {'mpld3_data': mpld3.fig_to_dict(figure)}
 
         plt.close()
 
@@ -183,6 +292,7 @@ def bs_plot_data():
 
     except Exception as e:
         return error_response(e)
+
 
 @app.route('/heston/plot_data', methods=['GET'])
 def heston_plot_data():
@@ -198,7 +308,6 @@ def heston_plot_data():
         strike = float(request.args['strike'])
         ttm = float(request.args['ttm'])
 
-
         xaxis = request.args['xaxis']
         if xaxis in ['spot', 'var0', 'strike', 'kappa', 'theta', 'xi']:
             xrange = [0.7, 1.5] * np.ones(2) * float(request.args[xaxis])
@@ -211,38 +320,40 @@ def heston_plot_data():
 
         xrange = np.linspace(xrange[0], xrange[1])
         ycall = [heston_pv(x if xaxis == 'spot' else spot,
-                   x if xaxis == 'var0' else var0,
-                   x if xaxis == 'ir' else r,
-                   x if xaxis == 'dy' else q,
-                   x if xaxis == 'kappa' else kappa,
-                   x if xaxis == 'theta' else theta,
-                   x if xaxis == 'xi' else xi,
-                   x if xaxis == 'rho' else rho,
-                   x if xaxis == 'strike' else strike,
-                   x if xaxis == 'ttm' else ttm,
-                   1.) for x in xrange]
+                           x if xaxis == 'var0' else var0,
+                           x if xaxis == 'ir' else r,
+                           x if xaxis == 'dy' else q,
+                           x if xaxis == 'kappa' else kappa,
+                           x if xaxis == 'theta' else theta,
+                           x if xaxis == 'xi' else xi,
+                           x if xaxis == 'rho' else rho,
+                           x if xaxis == 'strike' else strike,
+                           x if xaxis == 'ttm' else ttm,
+                           1.) for x in xrange]
         yput = [heston_pv(x if xaxis == 'spot' else spot,
-                   x if xaxis == 'var0' else var0,
-                   x if xaxis == 'ir' else r,
-                   x if xaxis == 'dy' else q,
-                   x if xaxis == 'kappa' else kappa,
-                   x if xaxis == 'theta' else theta,
-                   x if xaxis == 'xi' else xi,
-                   x if xaxis == 'rho' else rho,
-                   x if xaxis == 'strike' else strike,
-                   x if xaxis == 'ttm' else ttm,
-                   - 1.) for x in xrange]
+                          x if xaxis == 'var0' else var0,
+                          x if xaxis == 'ir' else r,
+                          x if xaxis == 'dy' else q,
+                          x if xaxis == 'kappa' else kappa,
+                          x if xaxis == 'theta' else theta,
+                          x if xaxis == 'xi' else xi,
+                          x if xaxis == 'rho' else rho,
+                          x if xaxis == 'strike' else strike,
+                          x if xaxis == 'ttm' else ttm,
+                          - 1.) for x in xrange]
 
         figure, ax = plt.subplots()
 
         plt.plot(xrange, ycall, 'b-', label='call')
-        plt.plot([float(request.args[xaxis])], [heston_pv(spot, var0, r, q, kappa, theta, xi, rho, strike, ttm, 1.)], 'bo')
+        plt.plot([float(request.args[xaxis])], [heston_pv(
+            spot, var0, r, q, kappa, theta, xi, rho, strike, ttm, 1.)], 'bo')
         plt.plot(xrange, yput, 'g--', label='put')
-        plt.plot([float(request.args[xaxis])], [heston_pv(spot, var0, r, q, kappa, theta, xi, rho, strike, ttm, -1.)], 'go')
+        plt.plot([float(request.args[xaxis])], [heston_pv(
+            spot, var0, r, q, kappa, theta, xi, rho, strike, ttm, -1.)], 'go')
         plt.legend(loc='best')
         plt.title('Heston')
 
-        response = {'mpld3_data':mpld3.fig_to_dict(figure)}
+        response = {'mpld3_data': mpld3.fig_to_dict(figure)}
 
         plt.close()
 
@@ -252,7 +363,7 @@ def heston_plot_data():
         return error_response(e)
 
 
-@app.route('/heston/price_anal',methods=['GET'])
+@app.route('/heston/price_anal', methods=['GET'])
 def heston_price_anal():
     try:
         spot = float(request.args['spot'])
@@ -266,13 +377,15 @@ def heston_price_anal():
         strike = float(request.args['strike'])
         ttm = float(request.args['ttm'])
 
-        call = heston_pv(spot,var0,r,q,kappa,theta,xi,rho,strike,ttm,1.)
-        put = heston_pv(spot,var0,r,q,kappa,theta,xi,rho,strike,ttm,-1.)
+        call = heston_pv(spot, var0, r, q, kappa, theta,
+                         xi, rho, strike, ttm, 1.)
+        put = heston_pv(spot, var0, r, q, kappa, theta,
+                        xi, rho, strike, ttm, -1.)
 
         result = {
-            'pv_call':call,
-            'pv_put':put
-            }
+            'pv_call': call,
+            'pv_put': put
+        }
         return json.dumps(result)
     except Exception as e:
         return error_response(e)
@@ -282,5 +395,6 @@ def heston_price_anal():
 def test_page():
     return render_template('test.html')
 
-if __name__=='__main__':
+
+if __name__ == '__main__':
     app.run()

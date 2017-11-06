@@ -1,7 +1,6 @@
 <template>
-    <div :id="id" 
-    	:class="{plotting: plotting, placeholder: data==null}"
-    	>
+    <div :id="id"
+         :class="{plotting: plotting, placeholder: data==null}">
     </div>
 </template>
 
@@ -14,18 +13,18 @@ export default {
     props: {
         id: { type: String, required: true },
         data: { type: Object },
-        plotting: {type: Boolean}
+        plotting: { type: Boolean }
     },
     mounted() {
         this.plot()
     },
     watch: {
-        data: function (value) {
+        data: function(value) {
             this.plot()
         }
     },
     methods: {
-        plot: function () {
+        plot: function() {
             if (this.data != null && Object.keys(this.data).length > 0) {
                 d3.select('#' + this.id).selectAll('*').remove()
                 mpld3.draw_figure(this.id, this.data)
@@ -36,11 +35,12 @@ export default {
 </script>
 
 <style>
-	.plotting{
-		background-color: #ffa;
-	}
-	.placeholder{
-		width: 640px;
-		height: 484px;
-	}
+.plotting {
+    background-color: #ffa;
+}
+
+.placeholder {
+    width: 640px;
+    height: 484px;
+}
 </style>
