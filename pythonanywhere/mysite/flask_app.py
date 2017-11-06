@@ -10,10 +10,11 @@ import numpy as np
 import matplotlib.pyplot as plt, mpld3
 
 from fin.heston import HestonLord, HestonParams
+import fin.heston_calibration  as hcal
 
 app = Flask(__name__)
 
-# ## this is a dev hack to test with "npm run dev" of the client (js) side
+# ## this is a dev hack to test with "npm run dev" the client (js) side
 from flask_cors import CORS
 cors = CORS(app, origins=['http://localhost:8080'])
 
@@ -29,15 +30,42 @@ def bs_pv(spot, vol, r, q, strike, ttm, phi):
     return df * phi * (fwd * st.norm.cdf(phi*dp) - strike * st.norm.cdf(phi*dm))
 
 ''' heston analytical pricer based on CF integration '''
-def heston_pv(spot,var0,r,q,kappa,theta,xi,rho,strike,ttm,phi):
-    params = HestonParams(spot,var0,r,q,kappa,theta,xi,rho)
+def heston_pv(spot, var0, r, q, kappa, theta, xi, rho, strike, ttm, phi):
+    params = HestonParams(spot, var0, r, q, kappa, theta, xi, rho)
     model = HestonLord(params)
 
-    return model.vanilla(strike,ttm,phi)
+    return model.vanilla(strike, ttm, phi)
+
+def heston_calibrate_to_single_smile(spot, input_quotes):
+    t = []
+    zrDom = []
+    fwd = []
+    
+    dfDomCurve = hcal.InterpolatedZeroCurve(hcal.LinearInterpolator(t,zrDom))
+    fxMarket = hcal.FxMarket(dfDomCurve,dfForCurve,fwdCurve)
+    calibrator = hcal.HestonCalibrator(fxMarket)
+    res = calibrator.calibrate_to_single_smile(ttm, strikes, vols)
 
 @app.route('/',methods=['GET'])
-def hello_world():
-    return 'Hello from Flask! Page loaded on {}.'.format(dt.datetime.now())
+def main_page():
+    try:
+        links = [
+            {
+                'title':'Black-Scholes Vanilla Pricer',
+                'link' :'/bs'
+            },
+            {
+                'title':'Heston Vanilla Pricer',
+                'link' :'/heston'                
+            },
+            {
+                'title':'Heston Calibration to FX Surface',
+                'link' : '/heston/calibration'
+            }
+            ]
+        return render_template('index.html',links=links)
+    except Exception as e:
+        return error_response(e)
 
 def error_response(e):
     return json.dumps({'error':{
@@ -58,6 +86,26 @@ def bs_render():
 def heston_render():
     try:
         return render_template('vanilla_anal.html', MODEL="Heston")
+    except Exception as e:
+        return error_response(e)
+
+@app.route('/heston/calibration')
+def heston_calibration_render():
+    try:
+        return render_template('model_calibration.html', MODEL='Heston')
+    except Exception as e:
+        return error_response(e)
+
+@app.route('/heston/calibrate',methods=['GET'])
+def heston_calibrate():
+    try:
+        spot = float(request.args['spot'])
+        input_quotes = json.loads(request.args['input_quotes'])
+
+        result={
+            'nbTenors':len(input_quotes)
+        }
+        return json.dumps(result)
     except Exception as e:
         return error_response(e)
 

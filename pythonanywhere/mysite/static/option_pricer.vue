@@ -1,24 +1,5 @@
 <template>
-	<div>
-		<!--
-		<div class="entry-list">
-			<entry id="spot" :wlabel="wlabel" label="Spot:" :wvalue="wvalue" :value="spot" @input="onParameterChange"></entry>
-			<entry id="ir" :wlabel="wlabel" label="Interest Rate:" :wvalue="wvalue" :value="ir" @input="onParameterChange"></entry>
-			<entry id="dy" :wlabel="wlabel" label="Dividend Yield:" :wvalue="wvalue" :value="dy" @input="onParameterChange"></entry>
-
-			<entry v-if="isBS" id="vol" :wlabel="wlabel" label="Vol:" :wvalue="wvalue" :value='vol' @input='onParameterChange'></entry>
-
-			<entry v-if="isHeston" id="var0" :wlabel="wlabel" label="Var:" :wvalue="wvalue" :value="var0" @input="onParameterChange"></entry>
-			<entry v-if="isHeston" id="kappa" :wlabel="wlabel" label="Speed Reversion:" :wvalue="wvalue" :value="kappa" @input="onParameterChange" ></entry>
-			<entry v-if="isHeston" id="theta" :wlabel="wlabel" label="Long-term Var:" :wvalue="wvalue" :value="theta" @input="onParameterChange" ></entry>
-			<entry v-if="isHeston" id="xi" :wlabel="wlabel" label="Vol of Var:" :wvalue="wvalue" :value="xi" @input="onParameterChange" ></entry>
-			<entry v-if="isHeston" id="rho" :wlabel="wlabel" label="Correlation:" :wvalue="wvalue" :value="rho" @input="onParameterChange" ></entry>
-
-			<entry id="strike" :wlabel="wlabel" label="Strike:" :wvalue="wvalue" :value="strike" @input="onParameterChange" ></entry>
-			<entry id="ttm" :wlabel="wlabel" label="Maturity:" :wvalue="wvalue" :value="ttm" @input="onParameterChange" ></entry>
-		</div>
-		-->
-		
+	<div class="option-pricer">
 		<div class="result-list">
 			<input-grid id="model_input" 
     				:params="params()"

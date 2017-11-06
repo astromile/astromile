@@ -2,7 +2,8 @@ var path = require('path')
 var webpack = require('webpack')
 
 module.exports = {
-  entry: './static/app.js',
+  //entry: './static/option_pricer.js',
+  entry: './static/model_calibration.js',
   output: {
     path: path.resolve(__dirname, './dist'),
     publicPath: '/dist/',
