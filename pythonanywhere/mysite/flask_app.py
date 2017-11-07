@@ -3,7 +3,7 @@
 from flask import Flask, render_template, request, json
 from flask_cors import CORS
 
-#import datetime as dt
+import datetime as dt
 import scipy.stats as st
 import numpy as np
 
@@ -70,11 +70,12 @@ def tenor2ttm(tenor):
     return m[tenor]
 
 
-def heston_calibrate_to_single_smile(spot, input_quotes):
+def heston_calibrate_to_single_smile(spot, input_quotes, ini_params):
     t = []
     zrDom = []
     fwdPoints = []
     smiles = []
+    tStart = dt.datetime.now()
 
     for q in input_quotes:
         ttm = tenor2ttm(q['tenor'])
@@ -109,7 +110,8 @@ def heston_calibrate_to_single_smile(spot, input_quotes):
                quoteHelper.atmStrike(t[0], smile[1]),
                quoteHelper.strikeForDelta(t[0], 0.25, smile[-1])]
 
-    hParams = calibrator.calibrate_to_single_smile(ttm, strikes, smile)
+    hParams = calibrator.calibrate_to_single_smile(
+        ttm, strikes, smile, ini_params)
 
     hestonMarket = hcal.HestonMarket(dfDomCurve, dfForCurve, fwdCurve, hParams)
 
@@ -119,8 +121,8 @@ def heston_calibrate_to_single_smile(spot, input_quotes):
     modelVols = [hestonMarket.impl_vol(t[0], ki) for ki in k]
     plt.plot(k, modelVols, '--', label='Heston implied vols')
     plt.plot(strikes, smile, 'o', label='Input Quotes')
-    plt.title(
-        r'$v_0={0.var0:.6f} \kappa={0.kappa:.4f} \theta={0.theta:.6f} \xi={0.xi:4f} \rho={0.rho:4f}$'.format(hParams))
+    # plt.title(
+    #    r'$v_0={0.var0:.6f} \kappa={0.kappa:.4f} \theta={0.theta:.6f} \xi={0.xi:4f} \rho={0.rho:4f}$'.format(hParams))
 
     plt.legend(loc='best')
 
@@ -129,8 +131,8 @@ def heston_calibrate_to_single_smile(spot, input_quotes):
 
     result = {
         'hestonParams': hParams,
-        'plotData': plotData
-    }
+        'plotData': plotData,
+        'elapsedTime': str(dt.datetime.now() - tStart)}
     return result
 
 
@@ -207,8 +209,10 @@ def heston_calibrate():
     try:
         spot = float(request.args['spot'])
         input_quotes = json.loads(request.args['input_quotes'])
+        ini_params = json.loads(request.args['ini_params'])
 
-        result = heston_calibrate_to_single_smile(spot, input_quotes)
+        result = heston_calibrate_to_single_smile(
+            spot, input_quotes, ini_params)
 
         return json.dumps(result, cls=JsonifiableEncoder)
     except Exception as e:

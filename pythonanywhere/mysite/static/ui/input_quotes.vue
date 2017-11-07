@@ -1,10 +1,11 @@
 <template>
-    <div class="input-grid-container">
-        <div :id="id" style="clear:left">
-        </div>
-				<button @click="dumpData">Dump data</button>
-				<button @click="calibrate">Calibrate</button>
-    </div>
+	<div class="input-grid-container">
+		<div :id="id"
+		     style="clear:left">
+		</div>
+		<button @click="dumpData">Dump data</button>
+		<button @click="calibrate">Calibrate</button>
+	</div>
 </template>
 
 
@@ -15,17 +16,17 @@ import Handsontable from './handsontable.full.min.js'
 export default {
 	name: 'InputQuotes',
 	props: ['id'],
-	data: function(){
+	data: function() {
 		return {
-			data : [{pm:'+'}],
-			hot  : null
+			data: [{ pm: '+' }],
+			hot: null
 		}
 	},
-	mounted: function(){
+	mounted: function() {
 		this.render_hot()
 	},
 	watch: {
-		params: function(){
+		params: function() {
 			this.render_hot()
 		},
 		xaxis: function() {
@@ -33,24 +34,24 @@ export default {
 		}
 	},
 	methods: {
-		render_hot: function(){
+		render_hot: function() {
 			const vm = this
-			
+
 			const container = document.getElementById(this.id)
-			container.innerHTML=''
+			container.innerHTML = ''
 			var settings = {
 				data: this.data,
-				colHeaders : ['','','Tenor','DF','Fwd','RR25','ATM','BF25'],
-				rowHeaders : false,
+				colHeaders: ['', '', 'Tenor', 'DF', 'Fwd', 'RR25', 'ATM', 'BF25'],
+				rowHeaders: false,
 				columns: [
-					{data: 'pm', readOnly: true},
-					{data: 'checked',type:'checkbox'},
-					{data: 'tenor', type:'dropdown', source:['ON','1W','2W','3W','1M','3M','6M','1Y']},
-					{data: 'df'},
-					{data: 'fwd'},
-					{data: 'rr25'},
-					{data: 'atm'},
-					{data: 'bf25'}
+					{ data: 'pm', readOnly: true },
+					{ data: 'checked', type: 'checkbox' },
+					{ data: 'tenor', type: 'dropdown', source: ['ON', '1W', '2W', '3W', '1M', '3M', '6M', '1Y'] },
+					{ data: 'df' },
+					{ data: 'fwd' },
+					{ data: 'rr25' },
+					{ data: 'atm' },
+					{ data: 'bf25' }
 				],
 				/*afterChange: function(change,source){
 					console.log('['+source+'] ' + change)
@@ -59,61 +60,51 @@ export default {
 					}else if((source=='CopyPaste.paste')){
 					}
 				},*/
-				afterOnCellMouseDown: function(e,loc){
+				afterOnCellMouseDown: function(e, loc) {
 					console.log('onCellMouseDown: ' + loc.row + ', ' + loc.col)
-					if(loc.col==0){
-						if(vm.data[loc.row].pm=='+'){
+					if (loc.col == 0) {
+						if (vm.data[loc.row].pm == '+') {
 							vm.data[loc.row].pm = '-'
 							vm.data[loc.row].checked = true
-							vm.data.push({pm:'+'})
+							vm.data.push({ pm: '+' })
 							vm.hot.render()
-						}else if(vm.data[loc.row].pm=='-'){
-							vm.data.splice(loc.row,1)
+						} else if (vm.data[loc.row].pm == '-') {
+							vm.data.splice(loc.row, 1)
 							vm.hot.render()
 						}
 					}
 				},
-				/*afterSelection: function(...selection){
-					console.log(selection)
-					var row = selection[0]
-					var col = selection[1]
-					if(row==vm.data.length-1 && col==0){
-						vm.data[row].pm = '-'
-						vm.data[row].checked = true
-						vm.data.push({pm:'+'})
-					}
-				}*/
 			}
-			this.hot = new Handsontable(container,settings)
+			this.hot = new Handsontable(container, settings)
 		},
-		dumpData(){
+		dumpData() {
 			console.log(this.data)
 		},
-		calibrate(){
+		calibrate() {
 			console.log('calibrating...')
 			var data = []
-			this.data.forEach(function(d){
-				if(d.checked){
+			this.data.forEach(function(d) {
+				if (d.checked) {
 					var smile = {}
-					for(var p in d){
-						if(p!='checked' && p!='pm'){
-							smile[p]=d[p]
+					for (var p in d) {
+						if (p != 'checked' && p != 'pm') {
+							smile[p] = d[p]
 						}
 					}
 					data.push(smile)
 				}
 			})
-			this.$emit('calibrate',data)
+			this.$emit('calibrate', data)
 		}
 	}
 }
 </script>
 
 <style>
-	* {
-		margin: 0;
-		padding: 0;
-	}
-	
-	@import './handsontable.full.min.css'
+* {
+	margin: 0;
+	padding: 0;
+}
+
+@import './handsontable.full.min.css'
 </style>

@@ -66,6 +66,7 @@ class BS:
 
         def obj(sigma): return call - BS(BSParams(self.m.s0,
                                                   self.m.r, self.m.q, sigma)).call(strike, ttm)
+
         x = newton(obj, atm)
         return x
 
@@ -74,8 +75,9 @@ class BS:
 
 
 class Heston93:
-    def __init__(self, params):
+    def __init__(self, params, integrationLimit=400.):
         self.m = params
+        self.integrationLim = integrationLimit
 
     def smile(self, strike, ttm):
         hestonCall = self.call(strike, ttm)
@@ -103,7 +105,7 @@ class Heston93:
         for j in [1, 2]:
             def integrand_j(w): return self.integrand(w, j, k, ttm)
             # res, _ = spi.quad(integrand_j, 0.0, np.inf)
-            res, _ = spi.quad(integrand_j, 0.0, 500.)
+            res, _ = spi.quad(integrand_j, 0.0, self.integrationLim)
             I.append(res)
             # assert err < 1.e-6
 
@@ -127,6 +129,62 @@ class Heston93:
         C = (m.r - m.q) * w * 1j * ttm + a / m.vov ** 2 * (
             ttm * gp
             - 2 * np.log((1. - g * np.exp(d * ttm)) / (1. - g))
+        )
+        D = gp / m.vov ** 2 \
+            * (np.exp(-d * ttm) - 1.) / (np.exp(-d * ttm) - g)
+
+        return np.exp(C + D * m.v0 + 1j * w * x)
+
+
+class HestonCommonCF(Heston93):
+    def __init__(self, params):
+        Heston93.__init__(self, params)
+
+    def integrand(self, w, j, k, ttm):
+        if j == 1:
+            return np.real(np.exp(-1j * w * k) * self.cf_lnS(w - 1j, ttm)
+                           / (1j * w * self.cf_lnS(-1j, ttm)))
+        else:
+            return np.real(np.exp(-1j * w * k) * self.cf_lnS(w, ttm) / (1j * w))
+
+    def cf_lnS(self, w, ttm):
+        m = self.m
+
+        alpha = -w / 2. * (w + 1j)
+        beta = m.kappa - m.rho * m.vov * w * 1j
+        gamma = m.vov ** 2 / 2.
+
+        h = np.sqrt(beta ** 2 - 4. * alpha * gamma)
+        rp = (beta + h) / m.vov ** 2
+        rm = (beta - h) / m.vov ** 2
+        g = rm / rp
+
+        C = m.kappa * (rm * ttm - 2. / m.vov ** 2 *
+                       np.log((1. - g * np.exp(-h * ttm)) / (1. - g)))
+        D = rm * (1. - np.exp(-h * ttm)) / (1. - g * np.exp(-h * ttm))
+
+        return np.exp(C * m.theta + D * m.v0 + 1j * w * (np.log(m.s0) + (m.r - m.q) * ttm))
+
+
+class HestonLord(Heston93):
+    def __init__(self, params):
+        Heston93.__init__(self, params)
+
+    def cf(self, j, ttm, w):
+        m = self.m
+        x = np.log(m.s0)
+        a = m.kappa * m.theta
+        b = m.kappa + m.lmbda - (m.rho * m.vov if j == 1 else 0.)
+        u = 1.5 - j
+        q = m.rho * m.vov * w * 1j
+        d = np.sqrt((q - b) ** 2 - m.vov ** 2 * (2. * u * w * 1j - w ** 2))
+        gp = b - q + d
+        gm = b - q - d
+        g = gp / gm
+
+        C = (m.r - m.q) * w * 1j * ttm + a / m.vov ** 2 * (
+            ttm * gm
+            - 2 * np.log((np.exp(-d * ttm) - g) / (1. - g))
         )
         D = gp / m.vov ** 2 \
             * (np.exp(-d * ttm) - 1.) / (np.exp(-d * ttm) - g)
@@ -197,59 +255,3 @@ class DeltaHelper:
             k, ttm, callput, premiumType, deltaType) - delta
         strike = newton(obj, strike)
         return strike
-
-
-class HestonCommonCF(Heston93):
-    def __init__(self, params):
-        Heston93.__init__(self, params)
-
-    def integrand(self, w, j, k, ttm):
-        if j == 1:
-            return np.real(np.exp(-1j * w * k) * self.cf_lnS(w - 1j, ttm)
-                           / (1j * w * self.cf_lnS(-1j, ttm)))
-        else:
-            return np.real(np.exp(-1j * w * k) * self.cf_lnS(w, ttm) / (1j * w))
-
-    def cf_lnS(self, w, ttm):
-        m = self.m
-
-        alpha = -w / 2. * (w + 1j)
-        beta = m.kappa - m.rho * m.vov * w * 1j
-        gamma = m.vov ** 2 / 2.
-
-        h = np.sqrt(beta ** 2 - 4. * alpha * gamma)
-        rp = (beta + h) / m.vov ** 2
-        rm = (beta - h) / m.vov ** 2
-        g = rm / rp
-
-        C = m.kappa * (rm * ttm - 2. / m.vov ** 2 *
-                       np.log((1. - g * np.exp(-h * ttm)) / (1. - g)))
-        D = rm * (1. - np.exp(-h * ttm)) / (1. - g * np.exp(-h * ttm))
-
-        return np.exp(C * m.theta + D * m.v0 + 1j * w * (np.log(m.s0) + (m.r - m.q) * ttm))
-
-
-class HestonLord(Heston93):
-    def __init__(self, params):
-        Heston93.__init__(self, params)
-
-    def cf(self, j, ttm, w):
-        m = self.m
-        x = np.log(m.s0)
-        a = m.kappa * m.theta
-        b = m.kappa + m.lmbda - (m.rho * m.vov if j == 1 else 0.)
-        u = 1.5 - j
-        q = m.rho * m.vov * w * 1j
-        d = np.sqrt((q - b) ** 2 - m.vov ** 2 * (2. * u * w * 1j - w ** 2))
-        gp = b - q + d
-        gm = b - q - d
-        g = gp / gm
-
-        C = (m.r - m.q) * w * 1j * ttm + a / m.vov ** 2 * (
-            ttm * gm
-            - 2 * np.log((np.exp(-d * ttm) - g) / (1. - g))
-        )
-        D = gp / m.vov ** 2 \
-            * (np.exp(-d * ttm) - 1.) / (np.exp(-d * ttm) - g)
-
-        return np.exp(C + D * m.v0 + 1j * w * x)

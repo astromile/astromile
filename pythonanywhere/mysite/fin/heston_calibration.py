@@ -121,9 +121,10 @@ class HestonParams:
 
 
 class HestonMarket(FxMarket):
-    def __init__(self, dfDomCurve, dfForCurve, fwdCurve, hestonParams):
+    def __init__(self, dfDomCurve, dfForCurve, fwdCurve, hestonParams, hestonImpl=heston.HestonLord):
         FxMarket.__init__(self, dfDomCurve, dfForCurve, fwdCurve)
         self.hestonParams = hestonParams
+        self.hestonImpl = hestonImpl
 
     def vanilla(self, ttm, strike):
         spot = self.spot()
@@ -139,7 +140,7 @@ class HestonMarket(FxMarket):
             vVol=self.hestonParams.xi,
             svCorrelation=self.hestonParams.rho
         )
-        model = heston.HestonLord(params)
+        model = self.hestonImpl(params)
 
         return self.dfDomCurve.df(ttm) * model.vanilla(strike, ttm)
 
@@ -157,7 +158,7 @@ class HestonMarket(FxMarket):
             vVol=self.hestonParams.xi,
             svCorrelation=self.hestonParams.rho
         )
-        model = heston.HestonLord(params)
+        model = self.hestonImpl(params)
 
         return model.smile(strike, ttm)
 
@@ -166,22 +167,70 @@ class HestonCalibrator:
     def __init__(self, fxMarket):
         self.fxMarket = fxMarket
 
-    def calibrate_to_single_smile(self, t, strikes, vols):
-        vols = np.array(vols)
+    def calibrate_to_single_smile(self, t, strikes, vols, iniParams):
+        self.iniParams = iniParams
 
         def obj(params): return sum(
             (self.impl_vol(t, strikes, params) - vols)**2.)
-        v = np.mean(vols)**2
-        iniParams = [v, 1., v, 1., 0.]
-        res = opt.minimize(obj, iniParams, method='nelder-mead')
-        calibratedParams = HestonParams(*res.x)
+        res = opt.minimize(obj, self.getIniParams(
+            iniParams), method='nelder-mead')
+        calibratedParams = self.getHestonParams(res.x)
         return calibratedParams
 
     def impl_vol(self, t, strikes, params):
-        hestonParams = HestonParams(*params)
         market = HestonMarket(
-            self.fxMarket.dfDomCurve, self.fxMarket.dfForCurve, self.fxMarket.fwdCurve, hestonParams)
-        return [market.impl_vol(t, k) for k in strikes]
+            self.fxMarket.dfDomCurve, self.fxMarket.dfForCurve, self.fxMarket.fwdCurve, self.getHestonParams(params))
+        return np.array([market.impl_vol(t, k) for k in strikes])
+
+    def getIniParams(self, params):
+        iniParams = []
+        if not params['var0']['fixed']:
+            iniParams.append(np.log(params['var0']['value']))
+        if not params['kappa']['fixed']:
+            iniParams.append(np.log(params['kappa']['value']))
+        if not params['theta']['fixed']:
+            iniParams.append(np.log(params['theta']['value']))
+        if not params['xi']['fixed']:
+            iniParams.append(np.log(params['xi']['value']))
+        if not params['rho']['fixed']:
+            iniParams.append(np.arctanh(params['rho']['value']))
+        return iniParams
+
+    def getHestonParams(self, params):
+        idx = 0
+        if self.iniParams['var0']['fixed']:
+            var0 = self.iniParams['var0']['value']
+        else:
+            var0 = np.exp(params[idx])
+            idx += 1
+        if self.iniParams['kappa']['fixed']:
+            kappa = self.iniParams['kappa']['value']
+        else:
+            kappa = np.exp(params[idx])
+            idx += 1
+        if self.iniParams['theta']['fixed']:
+            theta = self.iniParams['theta']['value']
+        else:
+            theta = np.exp(params[idx])
+            idx += 1
+        if self.iniParams['xi']['fixed']:
+            xi = self.iniParams['xi']['value']
+        else:
+            xi = np.exp(params[idx])
+            idx += 1
+        if self.iniParams['rho']['fixed']:
+            rho = self.iniParams['rho']['value']
+        else:
+            rho = np.tanh(params[idx])
+            idx += 1
+        hestonParams = HestonParams(
+            var0,
+            kappa,
+            theta,
+            xi,
+            rho
+        )
+        return hestonParams
 
 
 class DeltaType:
