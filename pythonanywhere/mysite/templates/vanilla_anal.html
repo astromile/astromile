@@ -2,23 +2,22 @@
 <html lang="en">
 
 <head>
-  <meta charset="utf-8">
-  <title>astrovue -O- {{MODEL}}</title>
-  <meta name="author" content="astromile">
-  <meta name="description" content="Online {{MODEL}} Analytical Pricer">
-
+    <meta charset="utf-8">
+    <title>astrovue -O- {{MODEL}}</title>
+    <meta name="author" content="astromile">
+    <meta name="description" content="Online {{MODEL}} Analytical Pricer">
 
 </head>
 
 <body>
 
-  <div id="app"></div>
+    <div id="app"></div>
 
-  <script>
-    var model = "{{MODEL}}"
-  </script>
+    <script>
+        var model = "{{MODEL}}"
+    </script>
 
-  <script src="{{url_for('static', filename='dist/vanilla_pricer.js')}}"></script>
+    <script src="{{url_for('static', filename='dist/vanilla_pricer.js')}}"></script>
 
 </body>
 

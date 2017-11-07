@@ -3,7 +3,6 @@
 		<div :id="id"
 		     style="clear:left">
 		</div>
-		<button @click="dumpData">Dump data</button>
 		<button @click="calibrate">Calibrate</button>
 	</div>
 </template>
@@ -76,9 +75,6 @@ export default {
 				},
 			}
 			this.hot = new Handsontable(container, settings)
-		},
-		dumpData() {
-			console.log(this.data)
 		},
 		calibrate() {
 			console.log('calibrating...')
