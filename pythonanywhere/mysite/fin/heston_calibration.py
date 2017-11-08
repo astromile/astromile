@@ -281,3 +281,42 @@ class QuoteHelper:
             deltaFactor *= strike / fwd
 
         return callput * deltaFactor * st.norm.cdf(callput * d)
+
+
+def testAtmStructure():
+	domCurve = InterpolatedZeroCurve(LinearInterpolator([1.],[0.]))
+	forCurve = InterpolatedZeroCurve(LinearInterpolator([1.], [0.]))
+	spot = 1.6235
+	fwdCurve = ForwardCurve(spot,domCurve,forCurve)
+	hParams = HestonParams(var0=0.01,
+		kappa=1.,
+		theta=0.01,
+		xi=1.,
+		rho=0.)
+	market = HestonMarket(domCurve,forCurve,fwdCurve,hParams)
+	t = [1./12., 3./12., 6./12., 1., 2., 5., 10.]
+	import matplotlib.pyplot as plt
+	for dx in np.linspace(-0.8,0.8,11):
+		atmStrikes = []
+		atmVols = []
+		for ttm in t:
+			fwd = fwdCurve.fwd(ttm)
+			h1 = HestonParams(hParams.var0,
+				hParams.kappa,
+				hParams.theta,
+				hParams.xi,
+				hParams.rho+dx)
+			m1 = HestonMarket(domCurve,forCurve,fwdCurve,h1)
+			atmStrike = opt.newton(lambda k: k-fwd * np.exp(m1.impl_vol(ttm,k)**2.*ttm/2.),fwd)
+			atmStrikes.append(atmStrike)
+			atmVols.append(m1.impl_vol(ttm,atmStrike))
+		
+		plt.plot(t,atmVols,'-' if dx==0. else '--',label=r'$\rho={:.2f}$'.format(hParams.rho+dx))
+		print 'plotted for dx =', dx
+
+	plt.legend(loc='best')
+	plt.title(r'$\sigma_I(K;v_0={0.var0:.4f}, \kappa={0.kappa:.2f}, \theta={0.theta:.4f}, \xi={0.xi:.2f}, \rho={0.rho:.2f})$'.format(hParams))
+	plt.show()
+
+if __name__=='__main__':
+	testAtmStructure()
