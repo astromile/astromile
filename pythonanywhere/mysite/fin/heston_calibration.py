@@ -1,3 +1,10 @@
+'''
+    heston calibration
+'''
+
+
+import bisect
+
 import numpy as np
 import scipy.stats as st
 import scipy.optimize as opt
@@ -30,7 +37,7 @@ class Interpolator:
             n = len(self.x)
             return (n - 2, n - 1)
         else:
-            left = bisect.bisect_right(x, a)
+            left = bisect.bisect_left(self.x, x)
             return (left, left + 1)
 
     def __call__(self, x):
@@ -50,8 +57,8 @@ class LinearInterpolator(Interpolator):
         Interpolator.__init__(self, x, y)
 
         if len(x) > 1:
-            self.dx = x[1:] - x[:-1]
-            self.fx = (y[1:] - y[:-1]) / self.dx
+            self.dx = self.x[1:] - self.x[:-1]
+            self.fx = (self.y[1:] - self.y[:-1]) / self.dx
 
     def __call__(self, x):
         if len(self.x) == 1:
@@ -177,6 +184,16 @@ class HestonCalibrator:
         calibratedParams = self.getHestonParams(res.x)
         return calibratedParams
 
+    def calibrate_to_surface(self, t, strikes, vols, iniParams):
+        self.iniParams = iniParams
+
+        def obj(params): return sum([sum((self.impl_vol(ti, ki, params) - vi) ** 2.)
+                                     for ti, ki, vi in zip(t, strikes, vols)])
+        res = opt.minimize(obj, self.getIniParams(
+            iniParams), method='nelder-mead')
+        calibratedParams = self.getHestonParams(res.x)
+        return calibratedParams, res.fun
+
     def impl_vol(self, t, strikes, params):
         market = HestonMarket(
             self.fxMarket.dfDomCurve, self.fxMarket.dfForCurve, self.fxMarket.fwdCurve, self.getHestonParams(params))
@@ -284,39 +301,91 @@ class QuoteHelper:
 
 
 def testAtmStructure():
-	domCurve = InterpolatedZeroCurve(LinearInterpolator([1.],[0.]))
-	forCurve = InterpolatedZeroCurve(LinearInterpolator([1.], [0.]))
-	spot = 1.6235
-	fwdCurve = ForwardCurve(spot,domCurve,forCurve)
-	hParams = HestonParams(var0=0.01,
-		kappa=1.,
-		theta=0.01,
-		xi=1.,
-		rho=0.)
-	market = HestonMarket(domCurve,forCurve,fwdCurve,hParams)
-	t = [1./12., 3./12., 6./12., 1., 2., 5., 10.]
-	import matplotlib.pyplot as plt
-	for dx in np.linspace(-0.8,0.8,11):
-		atmStrikes = []
-		atmVols = []
-		for ttm in t:
-			fwd = fwdCurve.fwd(ttm)
-			h1 = HestonParams(hParams.var0,
-				hParams.kappa,
-				hParams.theta,
-				hParams.xi,
-				hParams.rho+dx)
-			m1 = HestonMarket(domCurve,forCurve,fwdCurve,h1)
-			atmStrike = opt.newton(lambda k: k-fwd * np.exp(m1.impl_vol(ttm,k)**2.*ttm/2.),fwd)
-			atmStrikes.append(atmStrike)
-			atmVols.append(m1.impl_vol(ttm,atmStrike))
-		
-		plt.plot(t,atmVols,'-' if dx==0. else '--',label=r'$\rho={:.2f}$'.format(hParams.rho+dx))
-		print 'plotted for dx =', dx
+    import matplotlib.pyplot as plt
+    domCurve = InterpolatedZeroCurve(LinearInterpolator([1.], [0.]))
+    forCurve = InterpolatedZeroCurve(LinearInterpolator([1.], [0.]))
+    spot = 1.6235
+    fwdCurve = ForwardCurve(spot, domCurve, forCurve)
+    hParams = HestonParams(var0=0.01,
+                           kappa=1.,
+                           theta=0.01,
+                           xi=1.,
+                           rho=0.)
+    market = HestonMarket(domCurve, forCurve, fwdCurve, hParams)
+    t = np.concatenate([[1. / 252.], np.arange(1, 4) / 52.,
+                        np.arange(1, 25) / 12., np.arange(3., 11.)])  # , [100.]])
+    factors = {'var0': -.005, 'theta': -.005,
+               'kappa': -0.5, 'xi': 0.8, 'rho': -0.9}
+    param = 'kappa'
+    for dx in np.linspace(-10., 1., 11):
+        atmStrikes = []
+        atmVols = []
+        for ttm in t:
+            fwd = fwdCurve.fwd(ttm)
+            h1 = [getattr(hParams, p) + factors[p] * (dx if param == p else 0.)
+                  for p in ['var0', 'kappa', 'theta', 'xi', 'rho']]
+            h1 = HestonParams(*h1)
+            m1 = HestonMarket(domCurve, forCurve, fwdCurve, h1)
+            atmStrike = opt.newton(
+                lambda k: k - fwd * np.exp(m1.impl_vol(ttm, k)**2. * ttm / 2.), fwd)
+            atmStrikes.append(atmStrike)
+            atmVols.append(m1.impl_vol(ttm, atmStrike))
 
-	plt.legend(loc='best')
-	plt.title(r'$\sigma_I(K;v_0={0.var0:.4f}, \kappa={0.kappa:.2f}, \theta={0.theta:.4f}, \xi={0.xi:.2f}, \rho={0.rho:.2f})$'.format(hParams))
-	plt.show()
+        lbl = 'v_0' if param == 'var0' else '\\' + param
+        lbl = '$' + lbl + \
+            '={:.4f}$'.format(getattr(hParams, param) + dx * factors[param])
+        plt.plot(t, atmVols, '-' if dx == 0. else '--', label=lbl)
+        print 'plotted for dx =', dx
 
-if __name__=='__main__':
-	testAtmStructure()
+    plt.legend(loc='best')
+    plt.title(
+        r'$\sigma_I(T;v_0={0.var0:.4f}, \kappa={0.kappa:.2f}, \theta={0.theta:.4f}, \xi={0.xi:.2f}, \rho={0.rho:.2f})$'.format(hParams))
+    plt.ylim(0., 0.15)
+    plt.tight_layout()
+    plt.show()
+
+
+def testSmileStructures():
+    import matplotlib.pyplot as plt
+    domCurve = InterpolatedZeroCurve(LinearInterpolator([1.], [0.]))
+    forCurve = InterpolatedZeroCurve(LinearInterpolator([1.], [0.]))
+    spot = 1.6235
+    fwdCurve = ForwardCurve(spot, domCurve, forCurve)
+    hParams = HestonParams(var0=0.01,
+                           kappa=1.,
+                           theta=0.01,
+                           xi=1.,
+                           rho=0.)
+    market = HestonMarket(domCurve, forCurve, fwdCurve, hParams)
+    ttm = 10.
+    fwd = fwdCurve.fwd(ttm)
+    factors = {'var0':-.005, 'theta':-.005,
+               'kappa':-0.5, 'xi': 0.8, 'rho':-0.9}
+    param = 'rho'
+    strikes = np.linspace(1.5, 1.8)
+    for dx in np.linspace(-1., 1., 11):
+        vols = []
+        for strike in strikes:
+            h1 = [getattr(hParams, p) + factors[p] * (dx if param == p else 0.)
+                  for p in ['var0', 'kappa', 'theta', 'xi', 'rho']]
+            h1 = HestonParams(*h1)
+            m1 = HestonMarket(domCurve, forCurve, fwdCurve, h1)
+            vols.append(m1.impl_vol(ttm, strike))
+
+        lbl = 'v_0' if param == 'var0' else '\\' + param
+        lbl = '$' + lbl + \
+            '={:.4f}$'.format(getattr(hParams, param) + dx * factors[param])
+        plt.plot(strikes, vols, '-' if dx == 0. else '--', label=lbl)
+        print 'plotted for dx =', dx
+
+    plt.legend(loc='best')
+    plt.title(
+        r'$\sigma_I(K;T={1}, v_0={0.var0:.4f}, \kappa={0.kappa:.2f}, \theta={0.theta:.4f}, \xi={0.xi:.2f}, \rho={0.rho:.2f})$'.format(hParams, ttm))
+    plt.ylim(0., 0.15)
+    plt.tight_layout()
+    plt.show()
+
+
+if __name__ == '__main__':
+    # testAtmStructure()
+    testSmileStructures()

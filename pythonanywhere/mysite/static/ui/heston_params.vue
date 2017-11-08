@@ -50,7 +50,7 @@ export default {
 				rowHeaders: false,
 				columns: [
 					{ data: 'fixed', type: 'checkbox' },
-					{ data: 'name' },
+					{ data: 'name', readOnly: true },
 					{ data: 'iniValue', type: 'numeric', format: '0.000000' },
 					{ data: 'value', type: 'numeric', format: '0.000000', readOnly: true },
 				],

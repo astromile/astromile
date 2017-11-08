@@ -45,7 +45,7 @@ export default {
 				columns: [
 					{ data: 'pm', readOnly: true },
 					{ data: 'checked', type: 'checkbox' },
-					{ data: 'tenor', type: 'dropdown', source: ['ON', '1W', '2W', '3W', '1M', '3M', '6M', '1Y'] },
+					{ data: 'tenor', type: 'dropdown', source: ['ON', '1W', '2W', '3W', '1M', '3M', '6M', '1Y', '2Y', '3Y', '5Y'] },
 					{ data: 'df' },
 					{ data: 'fwd' },
 					{ data: 'rr25' },

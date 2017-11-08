@@ -76,8 +76,10 @@ def heston_calibrate_to_single_smile(spot, input_quotes, ini_params):
     fwdPoints = []
     smiles = []
     tStart = dt.datetime.now()
+    tenors = []
 
     for q in input_quotes:
+        tenors.append(q['tenor'])
         ttm = tenor2ttm(q['tenor'])
         df = float(q['df'])
         fwd = float(q['fwd'])
@@ -100,29 +102,38 @@ def heston_calibrate_to_single_smile(spot, input_quotes, ini_params):
     fxMarket = hcal.FxMarket(dfDomCurve, dfForCurve, fwdCurve)
     calibrator = hcal.HestonCalibrator(fxMarket)
 
-    smile = smiles[0]
     premiumType = hcal.PremiumType.Excluded
-    deltaType = hcal.DeltaType.Forward if t[0] < 1. else hcal.DeltaType.Spot
+    deltaType = hcal.DeltaType.Forward
     quoteHelper = hcal.QuoteHelper(fxMarket,
                                    deltaType,
                                    premiumType)
-    strikes = [quoteHelper.strikeForDelta(t[0], -0.25, smile[0]),
-               quoteHelper.atmStrike(t[0], smile[1]),
-               quoteHelper.strikeForDelta(t[0], 0.25, smile[-1])]
+    strikes = []
+    for i in xrange(len(t)):
+        strikes.append([quoteHelper.strikeForDelta(t[i], -0.25, smiles[i][0]),
+                        quoteHelper.atmStrike(t[i], smiles[i][1]),
+                        quoteHelper.strikeForDelta(t[i], 0.25, smiles[i][-1])])
 
-    hParams = calibrator.calibrate_to_single_smile(
-        ttm, strikes, smile, ini_params)
+    # hParams = calibrator.calibrate_to_single_smile(
+    #    ttm, strikes[0], smiles[0], ini_params)
+
+    hParams, optValue = calibrator.calibrate_to_surface(t, strikes, smiles, ini_params)
 
     hestonMarket = hcal.HestonMarket(dfDomCurve, dfForCurve, fwdCurve, hParams)
 
     figure, ax = plt.subplots()
 
-    k = np.linspace(strikes[0], strikes[-1])
-    modelVols = [hestonMarket.impl_vol(t[0], ki) for ki in k]
-    plt.plot(k, modelVols, '--', label='Heston implied vols')
-    plt.plot(strikes, smile, 'o', label='Input Quotes')
+    for i in xrange(len(t)):
+        k = np.linspace(strikes[i][0], strikes[i][-1])
+        modelVols = [hestonMarket.impl_vol(t[i], ki) for ki in k]
+
+        l = plt.plot(k, modelVols, '--', label=tenors[i])
+        color = l[0].get_color()
+
+        plt.plot(strikes[i], smiles[i], 'o' + color)
     # plt.title(
     #    r'$v_0={0.var0:.6f} \kappa={0.kappa:.4f} \theta={0.theta:.6f} \xi={0.xi:4f} \rho={0.rho:4f}$'.format(hParams))
+
+    plt.title('Objective={}'.format(optValue))
 
     plt.legend(loc='best')
 
