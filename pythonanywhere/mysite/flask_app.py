@@ -70,7 +70,7 @@ def tenor2ttm(tenor):
     return m[tenor]
 
 
-def heston_calibrate_to_single_smile(spot, input_quotes, ini_params):
+def heston_calibrate_to_single_smile(spot, input_quotes, ini_params, method):
     t = []
     zrDom = []
     fwdPoints = []
@@ -116,7 +116,10 @@ def heston_calibrate_to_single_smile(spot, input_quotes, ini_params):
     # hParams = calibrator.calibrate_to_single_smile(
     #    ttm, strikes[0], smiles[0], ini_params)
 
-    hParams, optValue = calibrator.calibrate_to_surface(t, strikes, smiles, ini_params)
+    if method == 'MC':
+        hParams, optValue = calibrator.calibrate_to_surface_mc(t, strikes, smiles, ini_params)
+    else:
+        hParams, optValue = calibrator.calibrate_to_surface(t, strikes, smiles, ini_params, method)
 
     hestonMarket = hcal.HestonMarket(dfDomCurve, dfForCurve, fwdCurve, hParams)
 
@@ -221,9 +224,10 @@ def heston_calibrate():
         spot = float(request.args['spot'])
         input_quotes = json.loads(request.args['input_quotes'])
         ini_params = json.loads(request.args['ini_params'])
+        method = request.args['method']
 
         result = heston_calibrate_to_single_smile(
-            spot, input_quotes, ini_params)
+            spot, input_quotes, ini_params, method)
 
         return json.dumps(result, cls=JsonifiableEncoder)
     except Exception as e:

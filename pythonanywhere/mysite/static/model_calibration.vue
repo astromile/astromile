@@ -7,6 +7,12 @@
 			       wlabel="5rem"
 			       wvalue="5rem"></entry>
 		</div>
+		<dropdown id="method"
+		          label="Method"
+		          v-model="method"
+		          :items="methods"
+		          wlabel="5rem"
+		          wvalue="5rem"></dropdown>
 		<div class="heston-params">
 			<heston-params id="heston_params"
 			               :optParams="heston_params"
@@ -29,8 +35,10 @@
 import './server.js'
 import InputQuotes from './ui/input_quotes.vue'
 import Entry from './ui/entry.vue'
+import Dropdown from './ui/dropdown.vue'
 import Mpld3Plot from './ui/mpld3_plot.vue'
 import HestonParams from './ui/heston_params.vue'
+
 
 export default {
 	name: 'ModelCalibration',
@@ -62,6 +70,8 @@ export default {
 			xaxis: 'spot',
 			plotting: true,
 			plot_data: null,
+			method: 'Nelder-Mead',
+			methods: ['Nelder-Mead', 'Powell', 'Cobyla', 'MC'],
 
 			heston_params: { var0: '', kappa: '', theta: '', xi: '', rho: '' },
 		}
@@ -78,7 +88,8 @@ export default {
 			var params = {
 				spot: this.spot,
 				input_quotes: JSON.stringify(data),
-				ini_params: JSON.stringify(iniParams)
+				ini_params: JSON.stringify(iniParams),
+				method: this.method
 			}
 			sendRequest('heston/calibrate', params, function(res) {
 				console.log('...calibration finished in ' + res.elapsedTime)
@@ -93,6 +104,7 @@ export default {
 	},
 	components: {
 		'entry': Entry,
+		'dropdown': Dropdown,
 		'input-quotes': InputQuotes,
 		'mpld3-plot': Mpld3Plot,
 		'heston-params': HestonParams,

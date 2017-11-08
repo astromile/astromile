@@ -184,15 +184,38 @@ class HestonCalibrator:
         calibratedParams = self.getHestonParams(res.x)
         return calibratedParams
 
-    def calibrate_to_surface(self, t, strikes, vols, iniParams):
+    def calibrate_to_surface(self, t, strikes, vols, iniParams, method):
         self.iniParams = iniParams
 
         def obj(params): return sum([sum((self.impl_vol(ti, ki, params) - vi) ** 2.)
                                      for ti, ki, vi in zip(t, strikes, vols)])
         res = opt.minimize(obj, self.getIniParams(
-            iniParams), method='nelder-mead')
+            iniParams),
+                           method=method)  # 'powell' 32, 'nelder-mead' 20, 'cobyla' 10,
+                           # method='nelder-mead')
         calibratedParams = self.getHestonParams(res.x)
         return calibratedParams, res.fun
+
+    def calibrate_to_surface_mc(self, t, strikes, vols, iniParams, nGen=300):
+        self.iniParams = iniParams
+        
+        def obj(params): return sum([sum((self.impl_vol(ti, ki, params) - vi) ** 2.)
+                                     for ti, ki, vi in zip(t, strikes, vols)])
+        
+        optParams = p0= self.getIniParams(iniParams)
+        optObj = obj(optParams)
+        M = .001
+        for i in xrange(nGen):
+            if i % 20 == 0:
+                p0 = optParams
+            p = p0 + M * np.random.randn(len(p0))
+            o = obj(p)
+            if o<optObj:
+                optObj = o
+                optParams = p
+
+        calibratedParams = self.getHestonParams(optParams)
+        return calibratedParams, optObj
 
     def impl_vol(self, t, strikes, params):
         market = HestonMarket(
