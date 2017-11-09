@@ -6,13 +6,13 @@
 			       v-model="spot"
 			       wlabel="5rem"
 			       wvalue="5rem"></entry>
+			<dropdown id="method"
+			          label="Method"
+			          v-model="method"
+			          :items="methods"
+			          wlabel="5rem"
+			          wvalue="5rem"></dropdown>
 		</div>
-		<dropdown id="method"
-		          label="Method"
-		          v-model="method"
-		          :items="methods"
-		          wlabel="5rem"
-		          wvalue="5rem"></dropdown>
 		<div class="heston-params">
 			<heston-params id="heston_params"
 			               :optParams="heston_params"
@@ -114,6 +114,10 @@ export default {
 </script>
 
 <style>
+.entry-list>div {
+	clear: left;
+}
+
 .heston-params {
 	padding: 5px;
 }
