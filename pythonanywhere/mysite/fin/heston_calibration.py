@@ -2,7 +2,6 @@
     heston calibration
 '''
 
-
 import bisect
 
 import numpy as np
@@ -13,11 +12,13 @@ import heston
 
 
 class IRCurve:
+
     def df(self, t):
         raise NotImplementedError()
 
 
 class ZeroCurve(IRCurve):
+
     def df(self, t):
         return np.exp(-t * self.zeroRate(t))
 
@@ -26,6 +27,7 @@ class ZeroCurve(IRCurve):
 
 
 class Interpolator:
+
     def __init__(self, x, y):
         self.x = np.array(x)
         self.y = np.array(y)
@@ -45,6 +47,7 @@ class Interpolator:
 
 
 class InterpolatedZeroCurve(ZeroCurve):
+
     def __init__(self, interpolator):
         self.interpolator = interpolator
 
@@ -53,6 +56,7 @@ class InterpolatedZeroCurve(ZeroCurve):
 
 
 class LinearInterpolator(Interpolator):
+
     def __init__(self, x, y):
         Interpolator.__init__(self, x, y)
 
@@ -69,6 +73,7 @@ class LinearInterpolator(Interpolator):
 
 
 class ForwardCurve:
+
     def __init__(self, spot, domCurve, forCurve):
         self.spot = spot
         self.domCurve = domCurve
@@ -79,6 +84,7 @@ class ForwardCurve:
 
 
 class ForwardCurveFromLinearPoints:
+
     def __init__(self, spot, t, points, fwdFactor=10000.):
         self.spot = spot
         self.t = t
@@ -93,6 +99,7 @@ class ForwardCurveFromLinearPoints:
 
 
 class ForwardHelper:
+
     @classmethod
     def implyForeignCurve(cls, fwdCurve, domCurve):
         t = fwdCurve.t
@@ -104,6 +111,7 @@ class ForwardHelper:
 
 
 class FxMarket:
+
     def __init__(self, dfDomCurve, dfForCurve, fwdCurve):
         self.dfDomCurve = dfDomCurve
         self.dfForCurve = dfForCurve
@@ -114,6 +122,7 @@ class FxMarket:
 
 
 class HestonParams:
+
     def __init__(self, var0, kappa, theta, xi, rho):
         self.var0 = var0
         self.kappa = kappa
@@ -128,7 +137,8 @@ class HestonParams:
 
 
 class HestonMarket(FxMarket):
-    def __init__(self, dfDomCurve, dfForCurve, fwdCurve, hestonParams, hestonImpl=heston.HestonLord):
+
+    def __init__(self, dfDomCurve, dfForCurve, fwdCurve, hestonParams, hestonImpl=heston.HestonSingleIntegration):
         FxMarket.__init__(self, dfDomCurve, dfForCurve, fwdCurve)
         self.hestonParams = hestonParams
         self.hestonImpl = hestonImpl
@@ -171,6 +181,7 @@ class HestonMarket(FxMarket):
 
 
 class HestonCalibrator:
+
     def __init__(self, fxMarket):
         self.fxMarket = fxMarket
 
@@ -178,7 +189,8 @@ class HestonCalibrator:
         self.iniParams = iniParams
 
         def obj(params): return sum(
-            (self.impl_vol(t, strikes, params) - vols)**2.)
+            (self.impl_vol(t, strikes, params) - vols) ** 2.)
+
         res = opt.minimize(obj, self.getIniParams(
             iniParams), method='nelder-mead')
         calibratedParams = self.getHestonParams(res.x)
@@ -189,6 +201,7 @@ class HestonCalibrator:
 
         def obj(params): return sum([sum((self.impl_vol(ti, ki, params) - vi) ** 2.)
                                      for ti, ki, vi in zip(t, strikes, vols)])
+
         res = opt.minimize(obj, self.getIniParams(
             iniParams),
                            method=method)  # 'powell' 32, 'nelder-mead' 20, 'cobyla' 10,
@@ -198,11 +211,11 @@ class HestonCalibrator:
 
     def calibrate_to_surface_mc(self, t, strikes, vols, iniParams, nGen=300):
         self.iniParams = iniParams
-        
+
         def obj(params): return sum([sum((self.impl_vol(ti, ki, params) - vi) ** 2.)
                                      for ti, ki, vi in zip(t, strikes, vols)])
-        
-        optParams = p0= self.getIniParams(iniParams)
+
+        optParams = p0 = self.getIniParams(iniParams)
         optObj = obj(optParams)
         M = .001
         for i in xrange(nGen):
@@ -210,7 +223,7 @@ class HestonCalibrator:
                 p0 = optParams
             p = p0 + M * np.random.randn(len(p0))
             o = obj(p)
-            if o<optObj:
+            if o < optObj:
                 optObj = o
                 optParams = p
 
@@ -284,6 +297,7 @@ class PremiumType:
 
 
 class QuoteHelper:
+
     def __init__(self, fxMarket, deltaType, premiumType):
         self.fxMarket = fxMarket
         self.deltaType = deltaType
@@ -291,7 +305,7 @@ class QuoteHelper:
 
     def atmStrike(self, ttm, atmVol):
         fwd = self.fxMarket.fwdCurve.fwd(ttm)
-        return fwd * np.exp(-self.premiumType * atmVol**2. * ttm / 2.)
+        return fwd * np.exp(-self.premiumType * atmVol ** 2. * ttm / 2.)
 
     def strikeForDelta(self, ttm, delta, vol):
         fwd = self.fxMarket.fwdCurve.fwd(ttm)
@@ -306,6 +320,7 @@ class QuoteHelper:
             callput = np.sign(delta)
 
             def obj(k): return delta - self.deltaBS(callput, ttm, k, vol)
+
             strike = opt.newton(obj, self.atmStrike(ttm, vol))
             return strike
 
@@ -337,8 +352,8 @@ def testAtmStructure():
     market = HestonMarket(domCurve, forCurve, fwdCurve, hParams)
     t = np.concatenate([[1. / 252.], np.arange(1, 4) / 52.,
                         np.arange(1, 25) / 12., np.arange(3., 11.)])  # , [100.]])
-    factors = {'var0': -.005, 'theta': -.005,
-               'kappa': -0.5, 'xi': 0.8, 'rho': -0.9}
+    factors = {'var0':-.005, 'theta':-.005,
+               'kappa':-0.5, 'xi': 0.8, 'rho':-0.9}
     param = 'kappa'
     for dx in np.linspace(-10., 1., 11):
         atmStrikes = []
@@ -350,7 +365,7 @@ def testAtmStructure():
             h1 = HestonParams(*h1)
             m1 = HestonMarket(domCurve, forCurve, fwdCurve, h1)
             atmStrike = opt.newton(
-                lambda k: k - fwd * np.exp(m1.impl_vol(ttm, k)**2. * ttm / 2.), fwd)
+                lambda k: k - fwd * np.exp(m1.impl_vol(ttm, k) ** 2. * ttm / 2.), fwd)
             atmStrikes.append(atmStrike)
             atmVols.append(m1.impl_vol(ttm, atmStrike))
 
@@ -410,5 +425,7 @@ def testSmileStructures():
 
 
 if __name__ == '__main__':
+
+
     # testAtmStructure()
     testSmileStructures()

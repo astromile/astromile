@@ -132,7 +132,7 @@ def heston_calibrate_to_single_smile(spot, input_quotes, ini_params, method):
         l = plt.plot(k, modelVols, '--', label=tenors[i])
         color = l[0].get_color()
 
-        plt.plot(strikes[i], smiles[i], 'o' + color)
+        plt.plot(strikes[i], smiles[i], 'o',color = color)
     # plt.title(
     #    r'$v_0={0.var0:.6f} \kappa={0.kappa:.4f} \theta={0.theta:.6f} \xi={0.xi:4f} \rho={0.rho:4f}$'.format(hParams))
 

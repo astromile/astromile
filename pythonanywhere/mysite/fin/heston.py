@@ -2,11 +2,13 @@
 import numpy as np
 import scipy.stats as st
 import scipy.integrate as spi
-from scipy.optimize.zeros import newton
+from scipy.optimize.zeros import newton, brentq
 import datetime
+from astropy.constants.si import atm
 
 
 class BSParams:
+
     def __init__(self, s0, r, q, sVol):
         self.s0 = s0
         self.r = r
@@ -15,6 +17,7 @@ class BSParams:
 
 
 class HestonParams:
+
     def __init__(self, s0, v0, r, q, vMeanRevSpeed, vLongTermMean, vVol, svCorrelation, priceOfVol=0.):
         self.s0 = s0
         self.v0 = v0
@@ -38,6 +41,7 @@ class HestonParams:
 
 
 class BS:
+
     def __init__(self, params):
         self.m = params
 
@@ -61,13 +65,35 @@ class BS:
         d2 = d1 - std
         return st.norm.cdf([d1, d2])
 
-    def impliedVol(self, strike, ttm, call):
-        atm = self.m.vol
+    def impliedVol(self, strike, ttm, pv, callput, guess=None):
+        atm = self.m.vol if guess is None else guess
 
-        def obj(sigma): return call - BS(BSParams(self.m.s0,
-                                                  self.m.r, self.m.q, sigma)).call(strike, ttm)
+        def obj(sigma): return pv - BS(BSParams(self.m.s0,
+                                                  self.m.r,
+                                                  self.m.q,
+                                                  sigma)).vanilla(strike, ttm, callput)
 
-        x = newton(obj, atm)
+        # return newton(obj, atm)
+
+        '''
+            braketing for better Brent performance
+        '''
+        l = r = atm
+        step = 1.05
+        if obj(atm) > 0.:
+            while True:
+                r *= step
+                if obj(r) < 0.:
+                    break
+                l = r / step
+        else:
+            while True:
+                l /= step
+                if obj(l) > 0.:
+                    break
+                r = l * step
+
+        x = brentq(obj, l, r)
         return x
 
     def smile(self, strike, ttm):
@@ -75,15 +101,20 @@ class BS:
 
 
 class Heston93:
+
     def __init__(self, params, integrationLimit=400.):
         self.m = params
         self.integrationLim = integrationLimit
 
-    def smile(self, strike, ttm):
-        hestonCall = self.call(strike, ttm)
-        bs = BS(BSParams(self.m.s0, self.m.r,
-                         self.m.q, np.sqrt(np.abs(self.m.v0))))
-        return bs.impliedVol(strike, ttm, hestonCall)
+    def smile(self, strike, ttm, guess=None):
+        fwd = self.m.s0 * np.exp((self.m.r - self.m.q) * ttm)
+        callput = 1. if strike > ttm else -1.
+        hestonPv = self.vanilla(strike, ttm, callput)
+        bs = BS(BSParams(self.m.s0,
+                         self.m.r,
+                         self.m.q,
+                         np.sqrt(np.abs(self.m.v0))))
+        return bs.impliedVol(strike, ttm, hestonPv, callput, guess)
 
     def call(self, strike, ttm):
         P1, P2 = self.P12(np.log(strike), ttm)
@@ -103,7 +134,9 @@ class Heston93:
     def I12(self, k, ttm):
         I = []
         for j in [1, 2]:
+
             def integrand_j(w): return self.integrand(w, j, k, ttm)
+
             # res, _ = spi.quad(integrand_j, 0.0, np.inf)
             res, _ = spi.quad(integrand_j, 0.0, self.integrationLim)
             I.append(res)
@@ -137,6 +170,7 @@ class Heston93:
 
 
 class HestonCommonCF(Heston93):
+
     def __init__(self, params):
         Heston93.__init__(self, params)
 
@@ -167,6 +201,7 @@ class HestonCommonCF(Heston93):
 
 
 class HestonLord(Heston93):
+
     def __init__(self, params):
         Heston93.__init__(self, params)
 
@@ -192,6 +227,25 @@ class HestonLord(Heston93):
         return np.exp(C + D * m.v0 + 1j * w * x)
 
 
+class HestonSingleIntegration(HestonLord):
+
+    def call(self, strike, ttm):
+        k = np.log(strike)
+        a1 = self.m.s0 * np.exp(-self.m.q * ttm)
+        a2 = strike * np.exp(-self.m.r * ttm)
+
+        def integrand(w):
+            i1 = self.integrand(w, 1, k, ttm)
+            i2 = self.integrand(w, 2, k, ttm)
+            return (a1 * i1 - a2 * i2) / np.pi
+
+        # subdivide for better performance
+        pv1, _ = spi.quad(integrand, 0., 100.)
+        pv2, _ = spi.quad(integrand, 100., self.integrationLim)
+
+        return (a1 - a2) / 2. + pv1 + pv2
+
+
 class PremiumType:
     Included = 1
     Excluded = 0
@@ -203,6 +257,7 @@ class DeltaType:
 
 
 class DeltaHelper:
+
     def __init__(self, model):
         self.m = model
 
@@ -234,6 +289,7 @@ class DeltaHelper:
 
         def obj(k): return self.deltaBS(k, ttm, 1., premiumType, deltaType) \
             + self.deltaBS(k, ttm, -1., premiumType, deltaType)
+
         strike = newton(obj, strike)
         return strike
 
@@ -253,5 +309,6 @@ class DeltaHelper:
 
         def obj(k): return self.deltaBS(
             k, ttm, callput, premiumType, deltaType) - delta
+
         strike = newton(obj, strike)
         return strike
