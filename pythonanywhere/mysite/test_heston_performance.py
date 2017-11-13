@@ -94,4 +94,4 @@ def calibrateToSingleSmile():
 
 if __name__ == '__main__':
     import cProfile
-    cProfile.run('calibrateToSingleSmile()')
+    cProfile.run('calibrateToSingleSmile()', sort=1)

@@ -143,7 +143,7 @@ class HestonMarket(FxMarket):
         self.hestonParams = hestonParams
         self.hestonImpl = hestonImpl
 
-    def vanilla(self, ttm, strike):
+    def vanilla(self, ttm, strike, callput):
         spot = self.spot()
         fwd = self.fwdCurve.fwd(ttm)
         params = heston.HestonParams(
@@ -159,7 +159,7 @@ class HestonMarket(FxMarket):
         )
         model = self.hestonImpl(params)
 
-        return self.dfDomCurve.df(ttm) * model.vanilla(strike, ttm)
+        return self.dfDomCurve.df(ttm) * model.vanilla(strike, ttm, callput)
 
     def impl_vol(self, ttm, strike):
         spot = self.spot()
@@ -196,16 +196,27 @@ class HestonCalibrator:
         calibratedParams = self.getHestonParams(res.x)
         return calibratedParams
 
-    def calibrate_to_surface(self, t, strikes, vols, iniParams, method):
+    def calibrate_to_surface(self, t, strikes, vols, iniParams, method, objective):
         self.iniParams = iniParams
 
-        def obj(params): return sum([sum((self.impl_vol(ti, ki, params) - vi) ** 2.)
+        spot = self.fxMarket.spot()
+        if objective == 'PV':
+            otm_pvs = []
+            for ti, ki, vi in zip(t, strikes, vols):
+                fwd = self.fxMarket.fwdCurve.fwd(ti)
+                r = -np.log(self.fxMarket.dfDomCurve.df(ti)) / ti
+                q = -np.log(self.fxMarket.dfForCurve.df(ti)) / ti
+                otm_pvs.append([heston.BS(heston.BSParams(spot, r, q, v)).vanilla(k, ti, np.sign(k - fwd))
+                       for k, v in zip(ki, vi)])
+
+            def obj(params): return sum([sum((self.pvs(ti, ki, params) - pvs) ** 2.)
+                                         for ti, ki, vi, pvs in zip(t, strikes, vols, otm_pvs)])
+
+        else:
+            def obj(params): return sum([sum((self.impl_vol(ti, ki, params) - vi) ** 2.)
                                      for ti, ki, vi in zip(t, strikes, vols)])
 
-        res = opt.minimize(obj, self.getIniParams(
-            iniParams),
-                           method=method)  # 'powell' 32, 'nelder-mead' 20, 'cobyla' 10,
-                           # method='nelder-mead')
+        res = opt.minimize(obj, self.getIniParams(iniParams), method=method)
         calibratedParams = self.getHestonParams(res.x)
         return calibratedParams, res.fun
 
@@ -231,9 +242,19 @@ class HestonCalibrator:
         return calibratedParams, optObj
 
     def impl_vol(self, t, strikes, params):
-        market = HestonMarket(
-            self.fxMarket.dfDomCurve, self.fxMarket.dfForCurve, self.fxMarket.fwdCurve, self.getHestonParams(params))
+        market = HestonMarket(self.fxMarket.dfDomCurve,
+                              self.fxMarket.dfForCurve,
+                              self.fxMarket.fwdCurve,
+                              self.getHestonParams(params))
         return np.array([market.impl_vol(t, k) for k in strikes])
+
+    def pvs(self, t, strikes, params):
+        market = HestonMarket(self.fxMarket.dfDomCurve,
+                              self.fxMarket.dfForCurve,
+                              self.fxMarket.fwdCurve,
+                              self.getHestonParams(params))
+        fwd = self.fxMarket.fwdCurve.fwd(t)
+        return np.array([market.vanilla(t, k, np.sign(k - fwd)) for k in strikes])
 
     def getIniParams(self, params):
         iniParams = []

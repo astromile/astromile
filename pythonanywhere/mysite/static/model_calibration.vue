@@ -3,42 +3,50 @@
 		<collapsable label="Market data">
 			<div class="entry-list">
 				<entry id="spot"
-							label="Spot"
-							v-model="spot"
-							:wlabel="wlabel"
-							:wvalue="wvalue"></entry>
+				       label="Spot"
+				       v-model="spot"
+				       :wlabel="wlabel"
+				       :wvalue="wvalue"></entry>
 				<dropdown id="premiumType"
-									label="Premium Type"
-									v-model="premiumType"
-									:items="['Excluded','Included']"
-									:wlabel="wlabel"
-									:wvalue="wvalue"></dropdown>
+				          label="Premium Type"
+				          v-model="premiumType"
+				          :items="['Excluded','Included']"
+				          :wlabel="wlabel"
+				          :wvalue="wvalue"></dropdown>
 				<div class="market-quotes">
-					<input-quotes id="input_data" ref="vueInputQuote"></input-quotes>
+					<input-quotes id="input_data"
+					              ref="vueInputQuote"></input-quotes>
 				</div>
 			</div>
 		</collapsable>
 		<collapsable label="Model Parameters">
 			<div>
 				<dropdown id="method"
-									label="Method"
-									v-model="method"
-									:items="methods"
-									:wlabel="wlabel"
-									:wvalue="wvalue"></dropdown>
+				          label="Method"
+				          v-model="method"
+				          :items="methods"
+				          :wlabel="wlabel"
+				          :wvalue="wvalue"></dropdown>
+				<dropdown id="objective"
+				          label="Fit"
+				          v-model="objective"
+				          :items="['PV','Vols']"
+				          :wlabel="wlabel"
+				          :wvalue="wvalue"></dropdown>
 				<div class="heston-params">
 					<heston-params id="heston_params"
-												:optParams="heston_params"
-												ref="hparams"></heston-params>
+					               :optParams="heston_params"
+					               ref="hparams"></heston-params>
 				</div>
-				<button @click="calibrate" :width="wlabel" >Calibrate</button>
+				<button @click="calibrate"
+				        :width="wlabel">Calibrate</button>
 			</div>
 		</collapsable>
 		<collapsable label="Plot">
 			<div class="plot">
 				<mpld3-plot id="fit_plot"
-										:data="plot_data"
-										:plotting="plotting"></mpld3-plot>
+				            :data="plot_data"
+				            :plotting="plotting"></mpld3-plot>
 			</div>
 		</collapsable>
 	</div>
@@ -62,8 +70,8 @@ export default {
 	props: ['model'],
 	data: function() {
 		return {
-			wlabel:'5rem',
-			wvalue:'5rem',
+			wlabel: '5rem',
+			wvalue: '5rem',
 
 			spot: 1.6235,
 			ir: 2.,
@@ -90,6 +98,7 @@ export default {
 			xaxis: 'spot',
 			plotting: true,
 			plot_data: null,
+			objective: 'PV',
 			method: 'Nelder-Mead',
 			methods: ['Nelder-Mead', 'Powell', 'Cobyla', 'MC'],
 
@@ -111,13 +120,15 @@ export default {
 				spot: this.spot,
 				input_quotes: JSON.stringify(this.$refs.vueInputQuote.getSelectedQuotes()),
 				ini_params: JSON.stringify(iniParams),
+				premium_type: this.premiumType,
+				objective: this.objective,
 				method: this.method
 			}
 			console.log('sending calibration request...')
 			sendRequest('heston/calibrate', params, function(res) {
-				console.log('...calibration finished in ' + res.elapsedCalibration +' (out off total ' + res.elapsedTime+')')
+				console.log('...calibration finished in ' + res.elapsedCalibration + ' (out off total ' + res.elapsedTime + ')')
 
-				if(res.hasOwnProperty('error')){
+				if (res.hasOwnProperty('error')) {
 					console.log(res.error)
 				}
 				vm.plotting = false

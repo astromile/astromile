@@ -61,7 +61,10 @@ class BS:
     def P12(self, k, ttm):
         std = self.m.vol * np.sqrt(ttm)
         fwd = self.m.s0 * np.exp((self.m.r - self.m.q) * ttm)
-        d1 = (np.log(fwd) - k) / std + std / 2.
+        k = np.log(fwd) - k
+        if std == 0.:
+            return np.ones(2) * np.sign(k)
+        d1 = k / std + std / 2.
         d2 = d1 - std
         return st.norm.cdf([d1, d2])
 

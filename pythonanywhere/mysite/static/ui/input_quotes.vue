@@ -13,7 +13,7 @@ import Handsontable from './handsontable.full.min.js'
 
 export default {
 	name: 'InputQuotes',
-	props: ['id'],
+	props: ['id', 'lowDelta'],
 	data: function() {
 		return {
 			data: [{ pm: '+' }],
@@ -39,7 +39,7 @@ export default {
 			container.innerHTML = ''
 			var settings = {
 				data: this.data,
-				colHeaders: ['', '', 'Tenor', 'DF', 'Fwd', 'RR25', 'ATM', 'BF25'],
+				colHeaders: this.lowDelta == 25 ? ['', '', 'Tenor', 'DF', 'Fwd', 'RR25', 'ATM', 'BF25', 'Delta Type'] : ['', '', 'Tenor', 'DF', 'Fwd', 'RR10', 'RR25', 'ATM', 'BF25', 'BF10', 'Delta Type'],
 				rowHeaders: false,
 				columns: [
 					{ data: 'pm', readOnly: true },
@@ -47,10 +47,17 @@ export default {
 					{ data: 'tenor', type: 'dropdown', source: ['ON', '1W', '2W', '3W', '1M', '3M', '6M', '1Y', '2Y', '3Y', '5Y'] },
 					{ data: 'df' },
 					{ data: 'fwd' },
+					{ data: 'rr10' },
 					{ data: 'rr25' },
 					{ data: 'atm' },
-					{ data: 'bf25' }
+					{ data: 'bf25' },
+					{ data: 'bf10' },
+					{ data: 'deltaType', type: 'dropdown', source: ['Spot', 'Forward'] }
 				],
+				hiddenColumns: {
+					columns: this.lowDelta == 25 ? [5, 9] : [],
+					indicators: false
+				},
 				afterOnCellMouseDown: function(e, loc) {
 					//console.log('onCellMouseDown: ' + loc.row + ', ' + loc.col)
 					if (loc.col == 0) {
@@ -70,22 +77,6 @@ export default {
 		},
 		getSelectedQuotes() {
 			var data = []
-			this.data.forEach(function(d){
-				if(d.checked){
-					var smile = {}
-					for(var p in d){
-						if(p!='checked' && p!='pm'){
-							smile[p] = d[p]
-						}
-					}
-					data.push(smile)
-				}
-			})
-			return data
-		},
-/*		calibrate() {
-			console.log('calibrating...')
-			var data = []
 			this.data.forEach(function(d) {
 				if (d.checked) {
 					var smile = {}
@@ -97,8 +88,24 @@ export default {
 					data.push(smile)
 				}
 			})
-			this.$emit('calibrate', data)
-		}*/
+			return data
+		},
+		/*		calibrate() {
+					console.log('calibrating...')
+					var data = []
+					this.data.forEach(function(d) {
+						if (d.checked) {
+							var smile = {}
+							for (var p in d) {
+								if (p != 'checked' && p != 'pm') {
+									smile[p] = d[p]
+								}
+							}
+							data.push(smile)
+						}
+					})
+					this.$emit('calibrate', data)
+				}*/
 	}
 }
 </script>

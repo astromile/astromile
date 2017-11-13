@@ -69,13 +69,14 @@ def tenor2ttm(tenor):
     return m[tenor]
 
 
-def heston_calibrate_to_single_smile(spot, input_quotes, ini_params, method):
+def heston_calibrate_to_single_smile(spot, input_quotes, ini_params, method, premiumType, objective):
     tStartMethod = dt.datetime.now()
     t = []
     zrDom = []
     fwdPoints = []
     smiles = []
     tenors = []
+    deltaTypes = []
 
     for q in input_quotes:
         tenors.append(q['tenor'])
@@ -85,13 +86,25 @@ def heston_calibrate_to_single_smile(spot, input_quotes, ini_params, method):
         rr25 = float(q['rr25']) / 100.
         atm = float(q['atm']) / 100.
         bf25 = float(q['bf25']) / 100.
+        if 'rr10' in q:
+            rr10 = float(q['rr10']) / 100.
+            bf10 = float(q['bf10']) / 100.
+
+        deltaTypes.append(hcal.DeltaType.Spot if q['deltaType'] == 'Spot' else hcal.DeltaType.Forward)
 
         t.append(ttm)
         zrDom.append(-np.log(df) / ttm)
         fwdPoints.append(fwd)
-        smiles.append([atm + bf25 - rr25 / 2.,
-                       atm,
-                       atm + bf25 + rr25 / 2.])
+        if 'rr10' in q:
+            smiles.append([atm + bf10 - rr10 / 2.,
+                           atm + bf25 - rr25 / 2.,
+                           atm,
+                           atm + bf25 + rr25 / 2.,
+                           atm + bf10 + rr10 / 2.])
+        else:
+            smiles.append([atm + bf25 - rr25 / 2.,
+                           atm,
+                           atm + bf25 + rr25 / 2.])
 
     fwdPointsCurve = hcal.ForwardCurveFromLinearPoints(spot, t, fwdPoints)
     dfDomCurve = hcal.InterpolatedZeroCurve(hcal.LinearInterpolator(t, zrDom))
@@ -100,16 +113,22 @@ def heston_calibrate_to_single_smile(spot, input_quotes, ini_params, method):
     fwdCurve = hcal.ForwardCurve(spot, dfDomCurve, dfForCurve)
     fxMarket = hcal.FxMarket(dfDomCurve, dfForCurve, fwdCurve)
 
-    premiumType = hcal.PremiumType.Included
+    premiumType = hcal.PremiumType.Included if premiumType == 'Included' else hcal.PremiumType.Excluded
     strikes = []
     for i in xrange(len(t)):
-        deltaType = hcal.DeltaType.Spot if t[i] < 1. else hcal.DeltaType.Forward
         quoteHelper = hcal.QuoteHelper(fxMarket,
-                                       deltaType,
+                                       deltaTypes[i],
                                        premiumType)
-        strikes.append([quoteHelper.strikeForDelta(t[i], -0.25, smiles[i][0]),
-                        quoteHelper.atmStrike(t[i], smiles[i][1]),
-                        quoteHelper.strikeForDelta(t[i], 0.25, smiles[i][-1])])
+        if 'rr10' in q:
+            strikes.append([quoteHelper.strikeForDelta(t[i], -0.1, smiles[i][0]),
+                            quoteHelper.strikeForDelta(t[i], -0.25, smiles[i][1]),
+                            quoteHelper.atmStrike(t[i], smiles[i][2]),
+                            quoteHelper.strikeForDelta(t[i], 0.25, smiles[i][3]),
+                            quoteHelper.strikeForDelta(t[i], 0.1, smiles[i][4])])
+        else:
+            strikes.append([quoteHelper.strikeForDelta(t[i], -0.25, smiles[i][0]),
+                            quoteHelper.atmStrike(t[i], smiles[i][1]),
+                            quoteHelper.strikeForDelta(t[i], 0.25, smiles[i][-1])])
 
     # hParams = calibrator.calibrate_to_single_smile(
     #    ttm, strikes[0], smiles[0], ini_params)
@@ -119,7 +138,7 @@ def heston_calibrate_to_single_smile(spot, input_quotes, ini_params, method):
     if method == 'MC':
         hParams, optValue = calibrator.calibrate_to_surface_mc(t, strikes, smiles, ini_params)
     else:
-        hParams, optValue = calibrator.calibrate_to_surface(t, strikes, smiles, ini_params, method)
+        hParams, optValue = calibrator.calibrate_to_surface(t, strikes, smiles, ini_params, method, objective)
     tEnd = dt.datetime.now()
 
     hestonMarket = hcal.HestonMarket(dfDomCurve, dfForCurve, fwdCurve, hParams)
@@ -228,9 +247,11 @@ def heston_calibrate():
         input_quotes = json.loads(request.args['input_quotes'])
         ini_params = json.loads(request.args['ini_params'])
         method = request.args['method']
+        premium_type = request.args['premium_type']
+        objective = request.args['objective']
 
         result = heston_calibrate_to_single_smile(
-            spot, input_quotes, ini_params, method)
+            spot, input_quotes, ini_params, method, premium_type, objective)
 
         return json.dumps(result, cls=JsonifiableEncoder)
     except Exception as e:

@@ -1,6 +1,7 @@
 <template>
 	<div>
-		<div :class="{title_collapsed:isCollapsed, title_uncollapsed:!isCollapsed}" @click="onPMClicked">
+		<div :class="{title_collapsed:isCollapsed, title_uncollapsed:!isCollapsed}"
+		     @click="onPMClicked">
 			<p>{{openclose}} {{label}} <hr></p>
 		</div>
 		<div :class="{collapsed:isCollapsed, uncollapsed:!isCollapsed}">
@@ -12,25 +13,27 @@
 
 <script>
 export default {
-    name: 'Collapsable',
-    props: {
-				label: {type:String},
-        collapsed: { type: Boolean }
+	name: 'Collapsable',
+	props: {
+		label: { type: String },
+		collapsed: { type: Boolean }
+	},
+	data: function() {
+		return {
+			isCollapsed: this.collapsed,
+		}
+	},
+	computed: {
+		openclose: function() {
+			return this.isCollapsed ? 'v' : '^'
+		}
+	},
+	methods: {
+		onPMClicked: function() {
+			//console.log('+/- clicked')
+			this.isCollapsed = !this.isCollapsed
 		},
-		data: function(){ return {
-				isCollapsed: this.collapsed,
-		}},
-		computed: {
-			openclose: function(){
-				return this.isCollapsed ? 'v' : '^'
-			}
-		},
-    methods: {
-				onPMClicked: function(){
-					console.log('+/- clicked')
-					this.isCollapsed = !this.isCollapsed
-				},
-    }
+	}
 }
 
 </script>
@@ -41,9 +44,9 @@ export default {
 	font-weight: bold;
 }
 
-.title_uncollapsed{
+.title_uncollapsed {
 	background: #ddd;
-	font-style:italic;
+	font-style: italic;
 }
 
 .collapsed {
