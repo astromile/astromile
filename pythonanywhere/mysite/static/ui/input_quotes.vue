@@ -3,7 +3,6 @@
 		<div :id="id"
 		     style="clear:left">
 		</div>
-		<button @click="calibrate">Calibrate</button>
 	</div>
 </template>
 
@@ -52,15 +51,8 @@ export default {
 					{ data: 'atm' },
 					{ data: 'bf25' }
 				],
-				/*afterChange: function(change,source){
-					console.log('['+source+'] ' + change)
-					if((source=='edit') && (change[0][1]=='value') && (change[0][2]!=change[0][3])){
-					}else if((source=='edit') && (change[0][1]=='xaxis') && !change[0][2]){
-					}else if((source=='CopyPaste.paste')){
-					}
-				},*/
 				afterOnCellMouseDown: function(e, loc) {
-					console.log('onCellMouseDown: ' + loc.row + ', ' + loc.col)
+					//console.log('onCellMouseDown: ' + loc.row + ', ' + loc.col)
 					if (loc.col == 0) {
 						if (vm.data[loc.row].pm == '+') {
 							vm.data[loc.row].pm = '-'
@@ -76,7 +68,22 @@ export default {
 			}
 			this.hot = new Handsontable(container, settings)
 		},
-		calibrate() {
+		getSelectedQuotes() {
+			var data = []
+			this.data.forEach(function(d){
+				if(d.checked){
+					var smile = {}
+					for(var p in d){
+						if(p!='checked' && p!='pm'){
+							smile[p] = d[p]
+						}
+					}
+					data.push(smile)
+				}
+			})
+			return data
+		},
+/*		calibrate() {
 			console.log('calibrating...')
 			var data = []
 			this.data.forEach(function(d) {
@@ -91,7 +98,7 @@ export default {
 				}
 			})
 			this.$emit('calibrate', data)
-		}
+		}*/
 	}
 }
 </script>

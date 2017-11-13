@@ -55,7 +55,7 @@ export default {
 					{ data: 'value', type: 'numeric', format: '0.000000', readOnly: true },
 				],
 				afterChange: function(change, source) {
-					console.log('[' + source + '] ' + change)
+					//console.log('[' + source + '] ' + change)
 					if ((source == 'edit') && (change[0][1] == 'iniValue') && (change[0][2] != change[0][3])) {
 					} else if ((source == 'edit') && (change[0][1] == 'fixed')) {
 						if (change[0][3]) {

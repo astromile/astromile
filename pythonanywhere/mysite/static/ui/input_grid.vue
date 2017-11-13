@@ -52,15 +52,15 @@ export default {
 					{data: 'xaxis', type:'checkbox'}
 				],
 				afterChange: function(change,source){
-					console.log('['+source+'] ' + change)
+					//console.log('['+source+'] ' + change)
 					if((source=='edit') && (change[0][1]=='value') && (change[0][2]!=change[0][3])){
 						var idx = change[0][0]
 						var newVal = change[0][3]
-						console.log(idx + ' :-> ' + newVal)
+						//console.log(idx + ' :-> ' + newVal)
 						vm.$emit('input',newVal, vm.params[idx].id)
 					}else if((source=='edit') && (change[0][1]=='xaxis') && !change[0][2]){
 						var idx = change[0][0]
-						console.log('new x-axis: ' + vm.params[idx].id)
+						//console.log('new x-axis: ' + vm.params[idx].id)
 						vm.$emit('xaxis',vm.params[idx].id)
 					}else if((source=='CopyPaste.paste')){
 						var newVal = {}

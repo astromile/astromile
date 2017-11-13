@@ -18,7 +18,6 @@ app = Flask(__name__)
 # ## this is a dev hack to test with "npm run dev" the client (js) side
 MY_CORS = CORS(app, origins=['http://localhost:8080'])
 
-
 ''' classical BS '''
 
 
@@ -71,16 +70,16 @@ def tenor2ttm(tenor):
 
 
 def heston_calibrate_to_single_smile(spot, input_quotes, ini_params, method):
+    tStartMethod = dt.datetime.now()
     t = []
     zrDom = []
     fwdPoints = []
     smiles = []
-    tStart = dt.datetime.now()
     tenors = []
 
     for q in input_quotes:
         tenors.append(q['tenor'])
-        ttm = tenor2ttm(q['tenor'])
+        ttm = tenor2ttm(tenors[-1])
         df = float(q['df'])
         fwd = float(q['fwd'])
         rr25 = float(q['rr25']) / 100.
@@ -100,15 +99,14 @@ def heston_calibrate_to_single_smile(spot, input_quotes, ini_params, method):
         fwdPointsCurve, dfDomCurve)
     fwdCurve = hcal.ForwardCurve(spot, dfDomCurve, dfForCurve)
     fxMarket = hcal.FxMarket(dfDomCurve, dfForCurve, fwdCurve)
-    calibrator = hcal.HestonCalibrator(fxMarket)
 
-    premiumType = hcal.PremiumType.Excluded
-    deltaType = hcal.DeltaType.Forward
-    quoteHelper = hcal.QuoteHelper(fxMarket,
-                                   deltaType,
-                                   premiumType)
+    premiumType = hcal.PremiumType.Included
     strikes = []
     for i in xrange(len(t)):
+        deltaType = hcal.DeltaType.Spot if t[i] < 1. else hcal.DeltaType.Forward
+        quoteHelper = hcal.QuoteHelper(fxMarket,
+                                       deltaType,
+                                       premiumType)
         strikes.append([quoteHelper.strikeForDelta(t[i], -0.25, smiles[i][0]),
                         quoteHelper.atmStrike(t[i], smiles[i][1]),
                         quoteHelper.strikeForDelta(t[i], 0.25, smiles[i][-1])])
@@ -116,10 +114,13 @@ def heston_calibrate_to_single_smile(spot, input_quotes, ini_params, method):
     # hParams = calibrator.calibrate_to_single_smile(
     #    ttm, strikes[0], smiles[0], ini_params)
 
+    calibrator = hcal.HestonCalibrator(fxMarket)
+    tStart = dt.datetime.now()
     if method == 'MC':
         hParams, optValue = calibrator.calibrate_to_surface_mc(t, strikes, smiles, ini_params)
     else:
         hParams, optValue = calibrator.calibrate_to_surface(t, strikes, smiles, ini_params, method)
+    tEnd = dt.datetime.now()
 
     hestonMarket = hcal.HestonMarket(dfDomCurve, dfForCurve, fwdCurve, hParams)
 
@@ -132,7 +133,7 @@ def heston_calibrate_to_single_smile(spot, input_quotes, ini_params, method):
         l = plt.plot(k, modelVols, '--', label=tenors[i])
         color = l[0].get_color()
 
-        plt.plot(strikes[i], smiles[i], 'o',color = color)
+        plt.plot(strikes[i], smiles[i], 'o', color=color)
     # plt.title(
     #    r'$v_0={0.var0:.6f} \kappa={0.kappa:.4f} \theta={0.theta:.6f} \xi={0.xi:4f} \rho={0.rho:4f}$'.format(hParams))
 
@@ -146,7 +147,8 @@ def heston_calibrate_to_single_smile(spot, input_quotes, ini_params, method):
     result = {
         'hestonParams': hParams,
         'plotData': plotData,
-        'elapsedTime': str(dt.datetime.now() - tStart)}
+        'elapsedCalibration': str(tEnd - tStart),
+        'elapsedTime': str(dt.datetime.now() - tStartMethod)}
     return result
 
 
@@ -178,7 +180,7 @@ def error_response(e):
     exc_type, exc_obj, exc_tb = sys.exc_info()
     fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
     line = exc_tb.tb_lineno
-    #print(exc_type, fname, exc_tb.tb_lineno)
+    # print(exc_type, fname, exc_tb.tb_lineno)
     return json.dumps({'error': {
         'type': str(type(e)),
         'str': str(e),
@@ -188,6 +190,7 @@ def error_response(e):
 
 
 class JsonifiableEncoder(json.JSONEncoder):
+
     def default(self, obj):
         if hasattr(obj, 'jsonify'):
             return obj.jsonify()
