@@ -216,6 +216,7 @@ class HestonCalibrator:
             def obj(params): return sum([sum((self.impl_vol(ti, ki, params) - vi) ** 2.)
                                      for ti, ki, vi in zip(t, strikes, vols)])
 
+        np.seterr(all='raise')
         res = opt.minimize(obj, self.getIniParams(iniParams), method=method)
         calibratedParams = self.getHestonParams(res.x)
         return calibratedParams, res.fun

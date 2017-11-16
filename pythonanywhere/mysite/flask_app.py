@@ -141,6 +141,75 @@ def heston_calibrate_to_single_smile(spot, input_quotes, ini_params, method, pre
         hParams, optValue = calibrator.calibrate_to_surface(t, strikes, smiles, ini_params, method, objective)
     tEnd = dt.datetime.now()
 
+    result = {
+        'hestonParams': hParams,
+        'objectiveValue': optValue,
+        'elapsedCalibration': str(tEnd - tStart),
+        'elapsedTime': str(dt.datetime.now() - tStartMethod)}
+    return result
+
+def heston_plot(spot, input_quotes, premiumType, hestonParams, xaxis, yaxis, optValue):
+    tStartMethod = dt.datetime.now()
+    t = []
+    zrDom = []
+    fwdPoints = []
+    smiles = []
+    tenors = []
+    deltaTypes = []
+
+    for q in input_quotes:
+        tenors.append(q['tenor'])
+        ttm = tenor2ttm(tenors[-1])
+        df = float(q['df'])
+        fwd = float(q['fwd'])
+        rr25 = float(q['rr25']) / 100.
+        atm = float(q['atm']) / 100.
+        bf25 = float(q['bf25']) / 100.
+        if 'rr10' in q:
+            rr10 = float(q['rr10']) / 100.
+            bf10 = float(q['bf10']) / 100.
+
+        deltaTypes.append(hcal.DeltaType.Spot if q['deltaType'] == 'Spot' else hcal.DeltaType.Forward)
+
+        t.append(ttm)
+        zrDom.append(-np.log(df) / ttm)
+        fwdPoints.append(fwd)
+        if 'rr10' in q:
+            smiles.append([atm + bf10 - rr10 / 2.,
+                           atm + bf25 - rr25 / 2.,
+                           atm,
+                           atm + bf25 + rr25 / 2.,
+                           atm + bf10 + rr10 / 2.])
+        else:
+            smiles.append([atm + bf25 - rr25 / 2.,
+                           atm,
+                           atm + bf25 + rr25 / 2.])
+
+    fwdPointsCurve = hcal.ForwardCurveFromLinearPoints(spot, t, fwdPoints)
+    dfDomCurve = hcal.InterpolatedZeroCurve(hcal.LinearInterpolator(t, zrDom))
+    dfForCurve = hcal.ForwardHelper.implyForeignCurve(
+        fwdPointsCurve, dfDomCurve)
+    fwdCurve = hcal.ForwardCurve(spot, dfDomCurve, dfForCurve)
+    fxMarket = hcal.FxMarket(dfDomCurve, dfForCurve, fwdCurve)
+
+    premiumType = hcal.PremiumType.Included if premiumType == 'Included' else hcal.PremiumType.Excluded
+    strikes = []
+    for i in xrange(len(t)):
+        quoteHelper = hcal.QuoteHelper(fxMarket,
+                                       deltaTypes[i],
+                                       premiumType)
+        if 'rr10' in q:
+            strikes.append([quoteHelper.strikeForDelta(t[i], -0.1, smiles[i][0]),
+                            quoteHelper.strikeForDelta(t[i], -0.25, smiles[i][1]),
+                            quoteHelper.atmStrike(t[i], smiles[i][2]),
+                            quoteHelper.strikeForDelta(t[i], 0.25, smiles[i][3]),
+                            quoteHelper.strikeForDelta(t[i], 0.1, smiles[i][4])])
+        else:
+            strikes.append([quoteHelper.strikeForDelta(t[i], -0.25, smiles[i][0]),
+                            quoteHelper.atmStrike(t[i], smiles[i][1]),
+                            quoteHelper.strikeForDelta(t[i], 0.25, smiles[i][-1])])
+
+    hParams = hcal.HestonParams(**hestonParams)
     hestonMarket = hcal.HestonMarket(dfDomCurve, dfForCurve, fwdCurve, hParams)
 
     figure, ax = plt.subplots()
@@ -164,10 +233,8 @@ def heston_calibrate_to_single_smile(spot, input_quotes, ini_params, method, pre
     plt.close()
 
     result = {
-        'hestonParams': hParams,
-        'plotData': plotData,
-        'elapsedCalibration': str(tEnd - tStart),
-        'elapsedTime': str(dt.datetime.now() - tStartMethod)}
+        'plotData': plotData
+        }
     return result
 
 
@@ -256,6 +323,25 @@ def heston_calibrate():
         return json.dumps(result, cls=JsonifiableEncoder)
     except Exception as e:
         return error_response(e)
+
+@app.route('/heston/plot', methods=['GET'])
+def heston_plot_request():
+    try:
+        spot = float(request.args['spot'])
+        input_quotes = json.loads(request.args['input_quotes'])
+        heston_params = json.loads(request.args['heston_params'])
+        premium_type = request.args['premium_type']
+        objective_value = request.args['objective_value']
+        xaxis = request.args['xaxis']
+        yaxis = request.args['yaxis']
+
+        result = heston_plot(
+            spot, input_quotes, premium_type, heston_params, xaxis, yaxis, objective_value)
+
+        return json.dumps(result, cls=JsonifiableEncoder)
+    except Exception as e:
+        return error_response(e)
+
 
 
 @app.route('/bs/price_anal', methods=['GET'])

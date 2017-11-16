@@ -44,123 +44,160 @@
 		</collapsable>
 		<collapsable label="Plot">
 			<div class="plot">
+				<dropdown id='yaxis'
+					label='Y-axis'
+					v-model="yaxis"
+					:items="['Volatility','Total Var.', 'PV','Density']"
+					:wlabel="wlabel"
+					:wvalue="wvalue"
+					:disabled="plotting"></dropdown>
 				<mpld3-plot id="fit_plot"
 				            :data="plot_data"
 				            :plotting="plotting"></mpld3-plot>
+				<dropdown id='xaxis'
+					label='X-axis'
+					v-model="xaxis"
+					:items="['Strike', 'Log-moneyness', 'Delta']"
+					:wlabel="wlabel"
+					:wvalue="wvalue"
+					:disabled="plotting"></dropdown>
 			</div>
 		</collapsable>
 	</div>
 </template>
 
 <script>
+import "./server.js";
 
-import './server.js'
+import Entry from "./ui/entry.vue";
+import Dropdown from "./ui/dropdown.vue";
+import Collapsable from "./ui/collapsable.vue";
 
-import Entry from './ui/entry.vue'
-import Dropdown from './ui/dropdown.vue'
-import Collapsable from './ui/collapsable.vue'
-
-import Mpld3Plot from './ui/mpld3_plot.vue'
-import InputQuotes from './ui/input_quotes.vue'
-import HestonParams from './ui/heston_params.vue'
-
+import Mpld3Plot from "./ui/mpld3_plot.vue";
+import InputQuotes from "./ui/input_quotes.vue";
+import HestonParams from "./ui/heston_params.vue";
 
 export default {
-	name: 'ModelCalibration',
-	props: ['model'],
-	data: function() {
-		return {
-			wlabel: '5rem',
-			wvalue: '5rem',
+  name: "ModelCalibration",
+  props: ["model"],
+  data: function() {
+    return {
+      wlabel: "5rem",
+      wvalue: "5rem",
 
-			spot: 1.6235,
-			ir: 2.,
-			dy: 0.,
+      spot: 1.6235,
+      ir: 2,
+      dy: 0,
 
-			vol: 10.,
+      vol: 10,
 
-			var0: 0.01,
-			kappa: 1.,
-			theta: 0.01,
-			xi: 0.5,
-			rho: -0.5,
+      var0: 0.01,
+      kappa: 1,
+      theta: 0.01,
+      xi: 0.5,
+      rho: -0.5,
 
-			strike: 1.6240,
-			ttm: 1.,
+      strike: 1.624,
+      ttm: 1,
 
-			pv_computed: false,
-			pv_call: 0,
-			pv_put: 0,
+      pv_computed: false,
+      pv_call: 0,
+      pv_put: 0,
 
-			wlabel: "10rem",
-			wvalue: "10rem",
+      wlabel: "10rem",
+      wvalue: "10rem",
 
-			xaxis: 'spot',
-			plotting: true,
-			plot_data: null,
-			objective: 'PV',
-			method: 'Nelder-Mead',
-			methods: ['Nelder-Mead', 'Powell', 'Cobyla', 'MC'],
+      xaxis: "spot",
+      plotting: true,
+      plot_data: null,
+      objective: "PV",
+      method: "Nelder-Mead",
+      methods: ["Nelder-Mead", "Powell", "Cobyla", "MC"],
 
-			premiumType: 'Excluded',
+      yaxis: "Volatility",
+      xaxis: "Strike",
 
-			heston_params: { var0: '', kappa: '', theta: '', xi: '', rho: '' },
-		}
-	},
-	methods: {
-		calibrate: function() {
-			this.plotting = true
-			const vm = this
-			var iniParams = {}
-			this.$refs.hparams.data.forEach(function(p) {
-				iniParams[p.id] = { value: p.iniValue, fixed: p.fixed }
-			})
-			//console.log(this.$refs.hparams.data)
-			var params = {
-				spot: this.spot,
-				input_quotes: JSON.stringify(this.$refs.vueInputQuote.getSelectedQuotes()),
-				ini_params: JSON.stringify(iniParams),
-				premium_type: this.premiumType,
-				objective: this.objective,
-				method: this.method
-			}
-			console.log('sending calibration request...')
-			sendRequest('heston/calibrate', params, function(res) {
-				console.log('...calibration finished in ' + res.elapsedCalibration + ' (out off total ' + res.elapsedTime + ')')
+      premiumType: "Excluded",
 
-				if (res.hasOwnProperty('error')) {
-					console.log(res.error)
-				}
-				vm.plotting = false
-				vm.heston_params = res.hestonParams
-				vm.plot_data = res.plotData
-			})
-		}
-	},
-	mounted: function() {
-	},
-	components: {
-		'entry': Entry,
-		'dropdown': Dropdown,
-		'collapsable': Collapsable,
-		'input-quotes': InputQuotes,
-		'mpld3-plot': Mpld3Plot,
-		'heston-params': HestonParams,
-	}
-}
+      heston_params: { var0: "", kappa: "", theta: "", xi: "", rho: "" }
+    };
+  },
+  methods: {
+    calibrate: function() {
+      this.plotting = true;
+      const vm = this;
+      var iniParams = {};
+      this.$refs.hparams.data.forEach(function(p) {
+        iniParams[p.id] = { value: p.iniValue, fixed: p.fixed };
+      });
+      //console.log(this.$refs.hparams.data)
+      var params = {
+        spot: this.spot,
+        input_quotes: JSON.stringify(
+          this.$refs.vueInputQuote.getSelectedQuotes()
+        ),
+        ini_params: JSON.stringify(iniParams),
+        premium_type: this.premiumType,
+        objective: this.objective,
+        method: this.method
+      };
+      console.log("sending calibration request...");
 
+      sendRequest("heston/calibrate", params, function(res) {
+        if (res.hasOwnProperty("error")) {
+          console.log("...calibration finished with error:");
+          console.log(res.error);
+          vm.plotting = false;
+        } else {
+          console.log(
+            "...calibration finished in " +
+              res.elapsedCalibration +
+              " (out off total " +
+              res.elapsedTime +
+              ")"
+          );
+          vm.heston_params = res.hestonParams;
+          vm.objective_value = res.ovjectiveValue;
+          var pparams = {
+            spot: vm.spot,
+            heston_params: JSON.stringify(vm.heston_params),
+            input_quotes: params.input_quotes,
+            objective_value: res.objectiveValue,
+            premium_type: vm.premiumType,
+            xaxis: vm.xaxis,
+            yaxis: vm.yaxis
+          };
+          sendRequest("heston/plot", pparams, function(res) {
+            console.log(res);
+            vm.plot_data = res.plotData;
+            vm.plotting = false;
+          });
+        }
+      });
+    }
+  },
+  mounted: function() {},
+  components: {
+    entry: Entry,
+    dropdown: Dropdown,
+    collapsable: Collapsable,
+    "input-quotes": InputQuotes,
+    "mpld3-plot": Mpld3Plot,
+    "heston-params": HestonParams
+  }
+};
 </script>
 
 <style>
-.entry-list>div {
-	clear: left;
+.entry-list > div {
+  clear: left;
 }
 
 .heston-params {
-	padding: 5px;
+  padding: 5px;
 }
 
 .market-qutes {
-	padding: 5px;
+  padding: 5px;
 }
 </style>
