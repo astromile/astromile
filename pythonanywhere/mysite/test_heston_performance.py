@@ -85,7 +85,8 @@ def calibrateToSingleSmile():
                                     strikes,
                                     vols,
                                     iniParams,
-                                    method='Nelder-Mead')
+                                    method='Nelder-Mead',
+                                    objective='PV')
     tEnd = datetime.now()
     print 'calibration finished in', tEnd - tStart
     print 'error', err

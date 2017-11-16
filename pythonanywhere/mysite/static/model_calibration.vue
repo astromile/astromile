@@ -57,7 +57,7 @@
 				<dropdown id='xaxis'
 					label='X-axis'
 					v-model="xaxis"
-					:items="['Strike', 'Log-moneyness', 'Delta']"
+					:items="['Strike', 'Log-Moneyness', 'Delta']"
 					:wlabel="wlabel"
 					:wvalue="wvalue"
 					:disabled="plotting"></dropdown>
@@ -157,23 +157,42 @@ export default {
               ")"
           );
           vm.heston_params = res.hestonParams;
-          vm.objective_value = res.ovjectiveValue;
-          var pparams = {
-            spot: vm.spot,
-            heston_params: JSON.stringify(vm.heston_params),
-            input_quotes: params.input_quotes,
-            objective_value: res.objectiveValue,
-            premium_type: vm.premiumType,
-            xaxis: vm.xaxis,
-            yaxis: vm.yaxis
-          };
-          sendRequest("heston/plot", pparams, function(res) {
-            console.log(res);
-            vm.plot_data = res.plotData;
-            vm.plotting = false;
-          });
+          vm.objective_value = res.objectiveValue;
+          vm.plotCalibratedCurves();
         }
       });
+    },
+    plotCalibratedCurves(e) {
+      this.plotting = true;
+      var pparams = {
+        spot: this.spot,
+        heston_params: JSON.stringify(this.heston_params),
+        input_quotes: JSON.stringify(
+          this.$refs.vueInputQuote.getSelectedQuotes()
+        ),
+        objective_value: this.objective_value,
+        premium_type: this.premiumType,
+        xaxis: this.xaxis,
+        yaxis: this.yaxis
+      };
+      const vm = this;
+      sendRequest("heston/plot", pparams, function(res) {
+        vm.plotting = false;
+        console.log(res);
+        vm.plot_data = res.plotData;
+      });
+    }
+  },
+  watch: {
+    xaxis: function(newVal, oldVal) {
+      if (newVal != oldVal) {
+        this.plotCalibratedCurves();
+      }
+    },
+    yaxis: function(newVal, oldVal) {
+      if (newVal != oldVal) {
+        this.plotCalibratedCurves();
+      }
     }
   },
   mounted: function() {},

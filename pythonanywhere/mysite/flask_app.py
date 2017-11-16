@@ -148,6 +148,7 @@ def heston_calibrate_to_single_smile(spot, input_quotes, ini_params, method, pre
         'elapsedTime': str(dt.datetime.now() - tStartMethod)}
     return result
 
+
 def heston_plot(spot, input_quotes, premiumType, hestonParams, xaxis, yaxis, optValue):
     tStartMethod = dt.datetime.now()
     t = []
@@ -215,19 +216,45 @@ def heston_plot(spot, input_quotes, premiumType, hestonParams, xaxis, yaxis, opt
     figure, ax = plt.subplots()
 
     for i in xrange(len(t)):
-        k = np.linspace(strikes[i][0], strikes[i][-1])
-        modelVols = [hestonMarket.impl_vol(t[i], ki) for ki in k]
+        fwdi = fwdCurve.fwd(t[i])
+        xPillars = kPillars = np.array(strikes[i])
+        yPillars = vPillars = np.array(smiles[i])
+        k = np.linspace(0.9 * strikes[i][0], 1.1 * strikes[i][-1])
+        k = np.array(sorted(set(k).union(kPillars)))
+        x = k
+        y = v = np.array([hestonMarket.impl_vol(t[i], xi) for xi in x])
+        if xaxis == 'Log-Moneyness':
+            x = np.log(k / fwdi)
+            xPillars = np.log(xPillars / fwdi)
+        elif xaxis == 'Delta':
+            # - fwd unadj put delta is used here
+            std = y * np.sqrt(t[i])
+            x = st.norm.cdf(np.log(x / fwdi) / std - std / 2.)
+            stdPillars = yPillars * np.sqrt(t[i])
+            xPillars = st.norm.cdf(np.log(xPillars / fwdi) / stdPillars - stdPillars / 2.)
+        elif xaxis == 'Strike':
+            pass
+        else:
+            raise RuntimeError('Unsupported x-axis {}'.format(xaxis))
 
-        l = plt.plot(k, modelVols, '--', label=tenors[i])
+        if yaxis == 'Total Var.':
+            y *= y * t[i]
+            yPillars *= yPillars * t[i]
+        elif yaxis == 'Volatility':
+            pass
+        elif yaxis == 'PV':
+            y = [hestonMarket.vanilla(t[i], ki, np.sign(ki - fwdi)) for ki in k]
+            yPillars = [hestonMarket.vanilla(t[i], ki, np.sign(ki - fwdi)) for ki in kPillars]
+        else:
+            raise RuntimeError('Unsupported y-axis {}'.format(yaxis))
+
+        l = plt.plot(x, y, '--', label=tenors[i])
         color = l[0].get_color()
 
-        plt.plot(strikes[i], smiles[i], 'o', color=color)
-    # plt.title(
-    #    r'$v_0={0.var0:.6f} \kappa={0.kappa:.4f} \theta={0.theta:.6f} \xi={0.xi:4f} \rho={0.rho:4f}$'.format(hParams))
-
-    plt.title('Objective={}'.format(optValue))
+        plt.plot(xPillars, yPillars, 'o', color=color)
 
     plt.legend(loc='best')
+    plt.title('Objective: {}'.format(float(optValue)))
 
     plotData = mpld3.fig_to_dict(figure)
     plt.close()
@@ -324,6 +351,7 @@ def heston_calibrate():
     except Exception as e:
         return error_response(e)
 
+
 @app.route('/heston/plot', methods=['GET'])
 def heston_plot_request():
     try:
@@ -341,7 +369,6 @@ def heston_plot_request():
         return json.dumps(result, cls=JsonifiableEncoder)
     except Exception as e:
         return error_response(e)
-
 
 
 @app.route('/bs/price_anal', methods=['GET'])
