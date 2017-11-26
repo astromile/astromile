@@ -106,7 +106,16 @@ class ForwardHelper:
         spot = fwdCurve.fwd(0)
         # F = S * DF_for / DF_dom  => DF_for = F/S * DF_dom
         forDf = [fwdCurve.fwd(ti) / spot * domCurve.df(ti) for ti in t]
-        zr = [-np.log(forDfi) / ti for ti, forDfi in zip(t, forDf)]
+        zr = [-np.log(dfi) / ti for ti, dfi in zip(t, forDf)]
+        return InterpolatedZeroCurve(LinearInterpolator(t, zr))
+
+    @classmethod
+    def implyDomesticCurve(cls, fwdCurve, forCurve):
+        t = fwdCurve.t
+        spot = fwdCurve.fwd(0)
+        # F = S * DF_for / DF_dom  => DF_dom = S/F * DF_for
+        domDf = [spot / fwdCurve.fwd(ti) * forCurve.df(ti) for ti in t]
+        zr = [-np.log(dfi) / ti for ti, dfi in zip(t, domDf)]
         return InterpolatedZeroCurve(LinearInterpolator(t, zr))
 
 
