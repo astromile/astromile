@@ -166,7 +166,7 @@ class HestonMarket(FxMarket):
             vVol=self.hestonParams.xi,
             svCorrelation=self.hestonParams.rho
         )
-        model = self.hestonImpl(params, integrationLimit=500.)
+        model = self.hestonImpl(params, integrationLimit=500., integrationScheme='romb')
 
         return self.dfDomCurve.df(ttm) * model.vanilla(strike, ttm, callput)
 

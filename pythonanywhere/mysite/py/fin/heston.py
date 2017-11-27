@@ -3,6 +3,7 @@ import numpy as np
 import scipy.stats as st
 import scipy.integrate as spi
 from scipy.optimize.zeros import newton, brentq
+import datetime
 
 
 class BSParams:
@@ -229,6 +230,10 @@ class HestonLord(Heston93):
 
 class HestonSingleIntegration(HestonLord):
 
+    def __init__(self, params, integrationLimit=np.inf, integrationScheme='quad'):
+        HestonLord.__init__(self, params, integrationLimit=integrationLimit)
+        self.integrationScheme = integrationScheme
+
     def call(self, strike, ttm):
         k = np.log(strike)
         a1 = self.m.s0 * np.exp(-self.m.q * ttm)
@@ -239,20 +244,91 @@ class HestonSingleIntegration(HestonLord):
             i2 = self.integrand(w, 2, k, ttm)
             return (a1 * i1 - a2 * i2) / np.pi
 
-        # subdivide for better performance
-        a = 0.0000001
-        b = 50.
-        c = self.integrationLim
-        n1 = 2 ** 8 + 1
-        n2 = 2 ** 5 + 1
-        pv1 = spi.romb(integrand(np.linspace(a, b, n1)),
-                       (b - a) / (n1 - 1))
-        pv2 = spi.romb(integrand(np.linspace(b, c, n2)),
-                       (c - b) / (n2 - 1))
-        # pv1, _ = spi.quad(integrand, 0., 50.)
-        # pv2, _ = spi.quad(integrand, 50., self.integrationLim)
+        
+        if self.integrationScheme == 'quad':
+            I = self.integrate_quad(integrand)
+        elif self.integrationScheme == 'romb':
+            I = self.integrate_romb1(integrand)
+        elif self.integrationScheme == 'romberg':
+            I = self.integrate_romberg(integrand)
+        elif self.integrationScheme == 'quadromb':
+            I = self.integrate_romb2(integrand)
+        else:
+            raise ValueError('Unsupported integration scheme {}'.format(self.integrationScheme))
 
-        return (a1 - a2) / 2. + pv1 + pv2
+        return (a1 - a2) / 2. + I
+
+    def integrate_quad(self, integrand):
+        # subdivide for better performance
+        b = 100.
+        pv1, _ = spi.quad(integrand, 0., b)
+        pv2, _ = spi.quad(integrand, b, self.integrationLim)
+        return pv1 + pv2
+
+    def integrate_romberg(self, integrand):
+        # subdivide for better performance
+        b = 100.
+        pv1 = spi.romberg(integrand, 1.e-9, b)
+        pv2 = spi.romberg(integrand, b, min(self.integrationLim, 700.))
+        return pv1 + pv2
+
+    def integrate_romb(self, integrand):
+        # subdivide for better performance
+        a = 1.e-9
+        b = 20.
+        c = self.integrationLim if self.integrationLim < np.inf else 400.
+
+        n1 = 2 ** 8 + 1
+        n2 = 2 ** 9 + 1
+
+        pv = spi.romb(integrand(np.linspace(a, b, n1)),
+                       (b - a) / (n1 - 1))
+        pv += spi.romb(integrand(np.linspace(b, c, n2)),
+                       (c - b) / (n2 - 1))
+
+        if self.integrationLim == np.inf:
+            pvinf, _ = spi.quad(integrand, c, np.inf)
+            pv += pvinf
+
+        return pv
+
+    def integrate_romb1(self, integrand):
+        # subdivide for better performance
+        a = [1.e-9, 1., 5., 20.] + ([self.integrationLim] if self.integrationLim < np.inf else [400., np.inf])
+        k = [4, 5, 6, 9]
+        if self.m.vov > 1.:
+            k[0] += 2
+        pv = 0.
+        for i in xrange(len(a) - 1):
+            l = a[i]
+            r = a[i + 1]
+            if r == np.inf:
+                pvi, _ = spi.quad(integrand, l, r)
+                pv += pvi
+            else:
+                pv += spi.romb(integrand(np.linspace(l, r, 2 ** k[i] + 1)),
+                               (r - l) / 2 ** k[i])
+
+        return pv
+
+    def integrate_romb2(self, integrand):
+        # subdivide for better performance
+        a = [0., 1., 5., 20.] + ([self.integrationLim] if self.integrationLim < np.inf else [400., np.inf])
+        k = [4, 5, 6, 9]
+        if self.m.vov > 1.:
+            k[0] += 2
+        pv = 0.
+        for i in xrange(len(a) - 1):
+            l = a[i]
+            r = a[i + 1]
+            if l == 0. or r == np.inf:
+                pvi, _ = spi.quad(integrand, l, r)
+                pv += pvi
+            else:
+                pv += spi.romb(integrand(np.linspace(l, r, 2 ** k[i] + 1)),
+                               (r - l) / 2 ** k[i])
+
+        return pv
 
 
 class PremiumType:
