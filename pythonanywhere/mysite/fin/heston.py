@@ -3,8 +3,6 @@ import numpy as np
 import scipy.stats as st
 import scipy.integrate as spi
 from scipy.optimize.zeros import newton, brentq
-import datetime
-from astropy.constants.si import atm
 
 
 class BSParams:
@@ -99,7 +97,7 @@ class BS:
         x = brentq(obj, l, r)
         return x
 
-    def smile(self, strike, ttm):
+    def smile(self, strike, ttm):  # @UnusedVariable
         return self.m.vol
 
 
@@ -110,7 +108,6 @@ class Heston93:
         self.integrationLim = integrationLimit
 
     def smile(self, strike, ttm, guess=None):
-        fwd = self.m.s0 * np.exp((self.m.r - self.m.q) * ttm)
         callput = 1. if strike > ttm else -1.
         hestonPv = self.vanilla(strike, ttm, callput)
         bs = BS(BSParams(self.m.s0,
@@ -174,8 +171,8 @@ class Heston93:
 
 class HestonCommonCF(Heston93):
 
-    def __init__(self, params):
-        Heston93.__init__(self, params)
+    def __init__(self, params, integrationLimit=np.inf):
+        Heston93.__init__(self, params, integrationLimit=integrationLimit)
 
     def integrand(self, w, j, k, ttm):
         if j == 1:
@@ -205,8 +202,8 @@ class HestonCommonCF(Heston93):
 
 class HestonLord(Heston93):
 
-    def __init__(self, params):
-        Heston93.__init__(self, params)
+    def __init__(self, params, integrationLimit=np.inf):
+        Heston93.__init__(self, params, integrationLimit=integrationLimit)
 
     def cf(self, j, ttm, w):
         m = self.m
