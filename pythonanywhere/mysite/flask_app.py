@@ -10,7 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import mpld3
 
-from fin.heston import HestonLord, HestonParams, DeltaHelper
+from fin.heston import HestonLord, HestonParams
 import fin.heston_calibration as hcal
 
 app = Flask(__name__)
@@ -150,7 +150,6 @@ def heston_calibrate_to_single_smile(spot, input_quotes, ini_params, method, pre
 
 
 def heston_plot(spot, input_quotes, premiumType, hestonParams, xaxis, yaxis, optValue):
-    tStartMethod = dt.datetime.now()
     t = []
     zrDom = []
     fwdPoints = []
@@ -213,16 +212,16 @@ def heston_plot(spot, input_quotes, premiumType, hestonParams, xaxis, yaxis, opt
     hParams = hcal.HestonParams(**hestonParams)
     hestonMarket = hcal.HestonMarket(dfDomCurve, dfForCurve, fwdCurve, hParams)
 
-    figure, ax = plt.subplots()
+    figure, _ = plt.subplots()
 
     for i in xrange(len(t)):
         fwdi = fwdCurve.fwd(t[i])
         xPillars = kPillars = np.array(strikes[i])
-        yPillars = vPillars = np.array(smiles[i])
+        yPillars = np.array(smiles[i])
         k = np.linspace(0.9 * strikes[i][0], 1.1 * strikes[i][-1])
         k = np.array(sorted(set(k).union(kPillars)))
         x = k
-        y = v = np.array([hestonMarket.impl_vol(t[i], xi) for xi in x])
+        y = np.array([hestonMarket.impl_vol(t[i], xi) for xi in x])
         if xaxis == 'Log-Moneyness':
             x = np.log(k / fwdi)
             xPillars = np.log(xPillars / fwdi)
@@ -409,34 +408,34 @@ def bs_plot_data():
 
         xaxis = request.args['xaxis']
         if xaxis in ['spot', 'vol', 'strike']:
-            xrange = [0.7, 1.5] * np.ones(2) * float(request.args[xaxis])
+            xrng = [0.7, 1.5] * np.ones(2) * float(request.args[xaxis])
         elif xaxis in ['ir', 'dy']:
-            xrange = [-0.03, +0.03] * np.ones(2) + float(request.args[xaxis])
+            xrng = [-0.03, +0.03] * np.ones(2) + float(request.args[xaxis])
         elif xaxis == 'ttm':
-            xrange = [0.1, 10.]
+            xrng = [0.1, 10.]
 
-        xrange = np.linspace(xrange[0], xrange[1])
+        xrng = np.linspace(xrng[0], xrng[1])
         ycall = [bs_pv(x if xaxis == 'spot' else spot,
                        x if xaxis == 'vol' else vol,
                        x if xaxis == 'ir' else r,
                        x if xaxis == 'dy' else q,
                        x if xaxis == 'strike' else strike,
                        x if xaxis == 'ttm' else ttm,
-                       1.) for x in xrange]
+                       1.) for x in xrng]
         yput = [bs_pv(x if xaxis == 'spot' else spot,
                       x if xaxis == 'vol' else vol,
                       x if xaxis == 'ir' else r,
                       x if xaxis == 'dy' else q,
                       x if xaxis == 'strike' else strike,
                       x if xaxis == 'ttm' else ttm,
-                      - 1.) for x in xrange]
+                      - 1.) for x in xrng]
 
         figure, ax = plt.subplots()
 
-        plt.plot(xrange, ycall, 'b', label='call')
+        plt.plot(xrng, ycall, 'b', label='call')
         plt.plot([float(request.args[xaxis])], [
                  bs_pv(spot, vol, r, q, strike, ttm, 1.)], 'bo')
-        plt.plot(xrange, yput, '--g', label='put')
+        plt.plot(xrng, yput, '--g', label='put')
         plt.plot([float(request.args[xaxis])], [
                  bs_pv(spot, vol, r, q, strike, ttm, -1.)], 'go')
         plt.legend(loc='best')
@@ -468,15 +467,15 @@ def heston_plot_data():
 
         xaxis = request.args['xaxis']
         if xaxis in ['spot', 'var0', 'strike', 'kappa', 'theta', 'xi']:
-            xrange = [0.7, 1.5] * np.ones(2) * float(request.args[xaxis])
+            xrng = [0.7, 1.5] * np.ones(2) * float(request.args[xaxis])
         elif xaxis == 'rho':
-            xrange = [-0.9, 0.9]
+            xrng = [-0.9, 0.9]
         elif xaxis in ['ir', 'dy']:
-            xrange = [-0.03, +0.03] * np.ones(2) + float(request.args[xaxis])
+            xrng = [-0.03, +0.03] * np.ones(2) + float(request.args[xaxis])
         elif xaxis == 'ttm':
-            xrange = [0.1, 10.]
+            xrng = [0.1, 10.]
 
-        xrange = np.linspace(xrange[0], xrange[1])
+        xrng = np.linspace(xrng[0], xrng[1])
         ycall = [heston_pv(x if xaxis == 'spot' else spot,
                            x if xaxis == 'var0' else var0,
                            x if xaxis == 'ir' else r,
@@ -487,7 +486,7 @@ def heston_plot_data():
                            x if xaxis == 'rho' else rho,
                            x if xaxis == 'strike' else strike,
                            x if xaxis == 'ttm' else ttm,
-                           1.) for x in xrange]
+                           1.) for x in xrng]
         yput = [heston_pv(x if xaxis == 'spot' else spot,
                           x if xaxis == 'var0' else var0,
                           x if xaxis == 'ir' else r,
@@ -498,14 +497,14 @@ def heston_plot_data():
                           x if xaxis == 'rho' else rho,
                           x if xaxis == 'strike' else strike,
                           x if xaxis == 'ttm' else ttm,
-                          - 1.) for x in xrange]
+                          - 1.) for x in xrng]
 
         figure, ax = plt.subplots()
 
-        plt.plot(xrange, ycall, 'b-', label='call')
+        plt.plot(xrng, ycall, 'b-', label='call')
         plt.plot([float(request.args[xaxis])], [heston_pv(
             spot, var0, r, q, kappa, theta, xi, rho, strike, ttm, 1.)], 'bo')
-        plt.plot(xrange, yput, 'g--', label='put')
+        plt.plot(xrng, yput, 'g--', label='put')
         plt.plot([float(request.args[xaxis])], [heston_pv(
             spot, var0, r, q, kappa, theta, xi, rho, strike, ttm, -1.)], 'go')
         plt.legend(loc='best')
