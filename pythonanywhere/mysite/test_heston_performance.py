@@ -1,9 +1,7 @@
-from fin.heston import Heston93
-from fin.heston_calibration import *
 
-import numpy as np
 from datetime import datetime
-
+import numpy as np
+from fin.heston_calibration import *
 
 def tenor2ttm(tenor):
     m = {'ON': 1. / 252,
@@ -34,7 +32,6 @@ def tenor2ttm(tenor):
 
 def calibrateToSingleSmile():
     spot = 1.6235
-    ttm = 1.
     input_quotes = [{
         'tenor': '1Y',
         'df':0.975420395,
