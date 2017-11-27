@@ -245,6 +245,8 @@ def heston_plot(spot, input_quotes, premiumType, hestonParams, xaxis, yaxis, opt
         elif yaxis == 'PV':
             y = [hestonMarket.vanilla(t[i], ki, np.sign(ki - fwdi)) for ki in k]
             yPillars = [hestonMarket.vanilla(t[i], ki, np.sign(ki - fwdi)) for ki in kPillars]
+        elif yaxis == 'Density':
+            pass
         else:
             raise RuntimeError('Unsupported y-axis {}'.format(yaxis))
 

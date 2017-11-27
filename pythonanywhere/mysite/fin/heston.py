@@ -243,8 +243,17 @@ class HestonSingleIntegration(HestonLord):
             return (a1 * i1 - a2 * i2) / np.pi
 
         # subdivide for better performance
-        pv1, _ = spi.quad(integrand, 0., 100.)
-        pv2, _ = spi.quad(integrand, 100., self.integrationLim)
+        a = 0.0000001
+        b = 50.
+        c = self.integrationLim
+        n1 = 2 ** 8 + 1
+        n2 = 2 ** 5 + 1
+        pv1 = spi.romb(integrand(np.linspace(a, b, n1)),
+                       (b - a) / (n1 - 1))
+        pv2 = spi.romb(integrand(np.linspace(b, c, n2)),
+                       (c - b) / (n2 - 1))
+        # pv1, _ = spi.quad(integrand, 0., 50.)
+        # pv2, _ = spi.quad(integrand, 50., self.integrationLim)
 
         return (a1 - a2) / 2. + pv1 + pv2
 
@@ -315,3 +324,22 @@ class DeltaHelper:
 
         strike = newton(obj, strike)
         return strike
+
+
+if __name__ == '__main__':
+    hp = HestonParams(s0=1.,
+                      v0=0.01,
+                      r=0.,
+                      q=0.,
+                      vMeanRevSpeed=1.,
+                      vLongTermMean=0.01,
+                      vVol=0.00001,
+                      svCorrelation=-0.8)
+    bsp = BSParams(s0=hp.s0, r=hp.r, q=hp.q, sVol=np.sqrt(hp.v0))
+    tstart = datetime.datetime.now()
+    print HestonSingleIntegration(hp).call(2., 10.)
+    for _ in xrange(100):
+        HestonSingleIntegration(hp).call(2., 10.)
+    t1 = datetime.datetime.now()
+    print t1 - tstart
+    print BS(bsp).call(2., 10.)
