@@ -178,8 +178,12 @@ export default {
       const vm = this;
       sendRequest("heston/plot", pparams, function(res) {
         vm.plotting = false;
-        console.log(res);
-        vm.plot_data = res.plotData;
+        if (res.hasOwnProperty("error")) {
+          console.log(res.error.str);
+          console.log(res.error.src);
+        } else {
+          vm.plot_data = res.plotData;
+        }
       });
     }
   },

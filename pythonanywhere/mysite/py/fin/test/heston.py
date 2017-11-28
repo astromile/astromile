@@ -5,13 +5,14 @@ Created on Nov 27, 2017
 '''
 import unittest
 from fin.heston import HestonParams, HestonSingleIntegration, Heston93, \
-    HestonCommonCF, HestonLord
+    HestonCommonCF, HestonLord, BSParams, BS
 
 import numpy as np
+import datetime
 
 class Test(unittest.TestCase):
-    TEST_EXACT = True
-    PRECISION = 10
+    TEST_EXACT = False
+    PRECISION = 15
 
     def testRegression(self):
         regression = [
@@ -56,7 +57,7 @@ class Test(unittest.TestCase):
         for p, k, t, v in  regression:
             v1 = HestonSingleIntegration(p,
                                          integrationLimit=np.inf,
-                                         integrationScheme='romberg').call(k, t)
+                                         integrationScheme='quad').call(k, t)
             
             self.assertRegression(v1, v,
                                   'Call(k={k}, t={t}; {p}) = {v1:.18f} <> {v:.18f} [{diff}]'
@@ -71,6 +72,69 @@ class Test(unittest.TestCase):
                                    places=self.PRECISION if precision is None else precision,
                                    msg=msg)
 
+    def testIsometry(self):
+        spot = 1.6235
+        v0 = 0.001
+        r = 0.025
+        q = 0.04
+
+        kappa = 0.5
+        theta = 0.001
+        xi = 0.1
+        rho = -0.2
+
+        t = 1.
+        dfCHF = np.exp(-r * t)
+        dfEUR = np.exp(-q * t)
+        fwd = spot * dfEUR / dfCHF
+
+        # test isometries
+        p1 = HestonParams(s0=spot,
+                          v0=v0,
+                          r=r,
+                          q=q,
+                          vMeanRevSpeed=kappa,
+                          vLongTermMean=theta,
+                          vVol=xi,
+                          svCorrelation=rho)
+
+        p2 = HestonParams(s0=fwd,
+                          v0=v0,
+                          r=0,
+                          q=0,
+                          vMeanRevSpeed=kappa,
+                          vLongTermMean=theta,
+                          vVol=xi,
+                          svCorrelation=rho)
+
+        pricer1 = HestonSingleIntegration(p1)
+        pricer2 = HestonSingleIntegration(p2)
+
+        strikes = np.linspace(1.5, 1.7)
+
+        for strike in strikes:
+            pvtrue = pricer1.put(strike, t)
+            pvscaled = pricer2.put(strike, t) * dfCHF
+            self.assertAlmostEqual(pvtrue, pvscaled, places=15,
+                             msg='isometry failed, eps={}'.format(abs(pvtrue - pvscaled)))
+
+
+    def testConvergence2BS(self):
+        vol = 0.1
+        hp = HestonParams(s0=1.,
+                          v0=vol ** 2.,
+                          r=0., q=0.,
+                          vMeanRevSpeed=1.,
+                          vLongTermMean=vol ** 2.,
+                          vVol=5.e-6,
+                          svCorrelation=-0.8)
+        bsp = BSParams(s0=hp.s0, r=hp.r, q=hp.q, sVol=vol)
+        strike = 2.
+        ttm = 10.
+        pv_bs = BS(bsp).call(strike, ttm)
+        pv_h = HestonSingleIntegration(hp).call(strike, ttm)
+
+        self.assertAlmostEquals(pv_bs, pv_h, 12)
 
 
 if __name__ == "__main__":

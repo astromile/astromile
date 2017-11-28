@@ -37,8 +37,10 @@ def calibrateToSingleSmile():
         'df':0.975420395,
         'fwd':-254.36,
         'rr25':-0.00350,
+        'rr10':-0.00630,
         'atm':.02975,
-        'bf25':0.00150
+        'bf25':0.00150,
+        'bf10':0.00525
         }]
 
     t = []
@@ -50,9 +52,15 @@ def calibrateToSingleSmile():
         zrDom.append(-np.log(q['df']) / t[-1])
         fwdPoints.append(q['fwd'])
         atm = q['atm']
-        rr = q['rr25']
-        bf = q['bf25']
-        vols.append([atm + bf - rr / 2., atm, atm + bf + rr / 2.])
+        rr25 = q['rr25']
+        bf25 = q['bf25']
+        rr10 = q['rr10']
+        bf10 = q['bf10']
+        vols.append([atm + bf10 - rr10 / 2.,
+                     atm + bf25 - rr25 / 2.,
+                     atm,
+                     atm + bf25 + rr25 / 2.,
+                     atm + bf10 + rr10 / 2.])
 
     domCurve = InterpolatedZeroCurve(LinearInterpolator(t, zrDom))
     fwdPointsCurve = ForwardCurveFromLinearPoints(spot, t, fwdPoints)
@@ -61,21 +69,24 @@ def calibrateToSingleSmile():
     fxMkt = FxMarket(domCurve, forCurve, fwdCurve)
 
     strikes = []
-    premiumType = PremiumType.Excluded
+    premiumType = PremiumType.Included
     for ti, smile in zip(t, vols):
-        deltaType = DeltaType.Spot if ti < 1. else DeltaType.Forward
+        deltaType = DeltaType.Spot if ti <= 1. else DeltaType.Forward
         quoteHelper = QuoteHelper(fxMkt, deltaType, premiumType)
-        strikes.append([quoteHelper.strikeForDelta(ti, -0.25, smile[0]),
-                        quoteHelper.atmStrike(ti, smile[1]),
-                        quoteHelper.strikeForDelta(ti, 0.25, smile[2])])
+        strikes.append([quoteHelper.strikeForDelta(ti, -0.10, smile[0]),
+                        quoteHelper.strikeForDelta(ti, -0.25, smile[1]),
+                        quoteHelper.atmStrike(ti, smile[2]),
+                        quoteHelper.strikeForDelta(ti, 0.25, smile[3]),
+                        quoteHelper.strikeForDelta(ti, 0.10, smile[4])
+                        ])
 
     calibrator = HestonCalibrator(fxMkt)
 
-    iniParams = {'var0':{'value':0.001, 'fixed':False},
-                 'theta':{'value':0.001, 'fixed':False},
-                 'kappa':{'value':1., 'fixed':True},
-                 'xi':{'value':0.1, 'fixed':False},
-                 'rho':{'value':-0.2, 'fixed':False}}
+    iniParams = {'var0':{'value':0.001314063, 'fixed':False},
+                 'theta':{'value':0.000849723, 'fixed':False},
+                 'kappa':{'value':0.6666667, 'fixed':True},
+                 'xi':{'value':0.033659521, 'fixed':False},
+                 'rho':{'value':-0.117647059, 'fixed':False}}
 
     tStart = datetime.now()
     optParams, err = calibrator.calibrate_to_surface(t,

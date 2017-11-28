@@ -61,11 +61,15 @@ class BS:
         std = self.m.vol * np.sqrt(ttm)
         fwd = self.m.s0 * np.exp((self.m.r - self.m.q) * ttm)
         k = np.log(fwd) - k
-        if std == 0.:
+        try:
+            np.seterr(divide='raise', over='raise')
+            d1 = k / std + std / 2.
+            d2 = d1 - std
+            return st.norm.cdf([d1, d2])
+        except FloatingPointError:
             return np.ones(2) * np.sign(k)
-        d1 = k / std + std / 2.
-        d2 = d1 - std
-        return st.norm.cdf([d1, d2])
+        finally:
+            np.seterr(divide='warn', over='warn')
 
     def impliedVol(self, strike, ttm, pv, callput, guess=None):
         atm = self.m.vol if guess is None else guess
@@ -109,7 +113,8 @@ class Heston93:
         self.integrationLim = integrationLimit
 
     def smile(self, strike, ttm, guess=None):
-        callput = 1. if strike > ttm else -1.
+        fwd = self.m.s0 * np.exp((self.m.r - self.m.q) * ttm)
+        callput = 1. if strike > fwd else -1.
         hestonPv = self.vanilla(strike, ttm, callput)
         bs = BS(BSParams(self.m.s0,
                          self.m.r,
@@ -218,14 +223,17 @@ class HestonLord(Heston93):
         gm = b - q - d
         g = gp / gm
 
+        np.seterr(under='ignore')
         C = (m.r - m.q) * w * 1j * ttm + a / m.vov ** 2 * (
             ttm * gm
             - 2 * np.log((np.exp(-d * ttm) - g) / (1. - g))
         )
         D = gp / m.vov ** 2 \
             * (np.exp(-d * ttm) - 1.) / (np.exp(-d * ttm) - g)
+        res = np.exp(C + D * m.v0 + 1j * w * x)
+        np.seterr(under='warn')
 
-        return np.exp(C + D * m.v0 + 1j * w * x)
+        return res
 
 
 class HestonSingleIntegration(HestonLord):
@@ -247,6 +255,8 @@ class HestonSingleIntegration(HestonLord):
         
         if self.integrationScheme == 'quad':
             I = self.integrate_quad(integrand)
+        elif self.integrationScheme == 'fixed_quad':
+            I = self.integrate_fixed_quad(integrand)
         elif self.integrationScheme == 'romb':
             I = self.integrate_romb1(integrand)
         elif self.integrationScheme == 'romberg':
@@ -264,6 +274,12 @@ class HestonSingleIntegration(HestonLord):
         pv1, _ = spi.quad(integrand, 0., b)
         pv2, _ = spi.quad(integrand, b, self.integrationLim)
         return pv1 + pv2
+
+    def integrate_fixed_quad(self, integrand):
+        # subdivide for better performance
+        b = 100.
+        pv1, _ = spi.fixed_quad(integrand, 1.e-9, 500., n=200)
+        return pv1
 
     def integrate_romberg(self, integrand):
         # subdivide for better performance

@@ -166,9 +166,8 @@ class HestonMarket(FxMarket):
             vVol=self.hestonParams.xi,
             svCorrelation=self.hestonParams.rho
         )
-        model = self.hestonImpl(params, integrationLimit=500., integrationScheme='romb')
 
-        return self.dfDomCurve.df(ttm) * model.vanilla(strike, ttm, callput)
+        return self.dfDomCurve.df(ttm) * self._getModel(params, lim=500.).vanilla(strike, ttm, callput)
 
     def impl_vol(self, ttm, strike):
         spot = self.spot()
@@ -184,10 +183,10 @@ class HestonMarket(FxMarket):
             vVol=self.hestonParams.xi,
             svCorrelation=self.hestonParams.rho
         )
-        model = self.hestonImpl(params)
+        return self._getModel(params).smile(strike, ttm)
 
-        return model.smile(strike, ttm)
-
+    def _getModel(self, params, lim=1000.):
+        return self.hestonImpl(params, integrationLimit=lim, integrationScheme='romb')
 
 class HestonCalibrator:
 

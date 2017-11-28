@@ -291,16 +291,24 @@ def main_page():
 def error_response(e):
     import sys
     import os
-    exc_type, exc_obj, exc_tb = sys.exc_info()
-    fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-    line = exc_tb.tb_lineno
-    # print(exc_type, fname, exc_tb.tb_lineno)
+    etype, e, exc_tb = sys.exc_info()
+    traceback = []
+    while exc_tb is not None:
+        filename = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+        funcname = exc_tb.tb_frame.f_code.co_name
+        line = exc_tb.tb_lineno
+        traceback.append('{funcname}@{filename}:{line}'.format(filename=filename,
+                                                               funcname=funcname,
+                                                               line=line))
+        exc_tb = exc_tb.tb_next
+
+    src = '\n'.join(['<-- ' + tb for tb in traceback[::-1]])
     return json.dumps({'error': {
-        'type': str(type(e)),
+        'type': str(etype),
         'str': str(e),
         'repr': repr(e),
         'msg': e.message,
-        'src': '{}@{}'.format(line, fname)}})
+        'src': src}})
 
 
 class JsonifiableEncoder(json.JSONEncoder):
