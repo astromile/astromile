@@ -152,7 +152,11 @@ class Heston93:
         return I
 
     def integrand(self, w, j, k, ttm):
-        return np.real(np.exp(-1j * w * k) * self.cf(j, ttm, w) / (1j * w))
+        err = np.geterr()
+        np.seterr(under='ignore')
+        v = np.real(np.exp(-1j * w * k) * self.cf(j, ttm, w) / (1j * w))
+        np.seterr(under=err['under'])
+        return v
 
     def cf(self, j, ttm, w):
         m = self.m
@@ -258,6 +262,9 @@ class HestonSingleIntegration(HestonLord):
         a1 = self.m.s0 * np.exp(-self.m.q * ttm)
         a2 = strike * np.exp(-self.m.r * ttm)
 
+        err = np.geterr()
+        np.seterr(under='ignore')
+
         def integrand(w):
             i1 = self.integrand(w, 1, k, ttm)
             i2 = self.integrand(w, 2, k, ttm)
@@ -276,6 +283,8 @@ class HestonSingleIntegration(HestonLord):
             I = self.integrate_romb2(integrand)
         else:
             raise ValueError('Unsupported integration scheme {}'.format(self.integrationScheme))
+
+        np.seterr(under=err['under'])
 
         return (a1 - a2) / 2. + I
 

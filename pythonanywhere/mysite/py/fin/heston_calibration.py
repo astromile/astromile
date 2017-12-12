@@ -9,6 +9,7 @@ import scipy.stats as st
 import scipy.optimize as opt
 
 import heston
+from src.fin.heston import HestonSingleIntegration
 
 
 class IRCurve:
@@ -147,10 +148,9 @@ class HestonParams:
 
 class HestonMarket(FxMarket):
 
-    def __init__(self, dfDomCurve, dfForCurve, fwdCurve, hestonParams, hestonImpl=heston.HestonSingleIntegration):
+    def __init__(self, dfDomCurve, dfForCurve, fwdCurve, hestonParams):
         FxMarket.__init__(self, dfDomCurve, dfForCurve, fwdCurve)
         self.hestonParams = hestonParams
-        self.hestonImpl = hestonImpl
 
     def vanilla(self, ttm, strike, callput):
         spot = self.spot()
@@ -166,7 +166,7 @@ class HestonMarket(FxMarket):
             vVol=self.hestonParams.xi,
             svCorrelation=self.hestonParams.rho
         )
-        model = self.hestonImpl(params)
+        model = HestonSingleIntegration(params, integrationLimit=400., integrationScheme='romb')
 
         return self.dfDomCurve.df(ttm) * model.vanilla(strike, ttm, callput)
 
@@ -184,7 +184,7 @@ class HestonMarket(FxMarket):
             vVol=self.hestonParams.xi,
             svCorrelation=self.hestonParams.rho
         )
-        model = self.hestonImpl(params)
+        model = HestonSingleIntegration(params, integrationLimit=400., integrationScheme='romb')
 
         return model.smile(strike, ttm)
 
