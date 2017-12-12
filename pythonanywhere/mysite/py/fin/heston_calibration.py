@@ -68,7 +68,7 @@ class LinearInterpolator(Interpolator):
         if len(self.x) == 1:
             return self.y[0]
         elif len(self.x) > 1:
-            left, _ = self.locate(x)
+            left, right = self.locate(x)
             return self.y[left] + self.fx[left] * (x - self.x[left]) / self.dx[left]
 
 
@@ -166,8 +166,9 @@ class HestonMarket(FxMarket):
             vVol=self.hestonParams.xi,
             svCorrelation=self.hestonParams.rho
         )
+        model = self.hestonImpl(params)
 
-        return self.dfDomCurve.df(ttm) * self._getModel(params, lim=500.).vanilla(strike, ttm, callput)
+        return self.dfDomCurve.df(ttm) * model.vanilla(strike, ttm, callput)
 
     def impl_vol(self, ttm, strike):
         spot = self.spot()
@@ -183,10 +184,10 @@ class HestonMarket(FxMarket):
             vVol=self.hestonParams.xi,
             svCorrelation=self.hestonParams.rho
         )
-        return self._getModel(params).smile(strike, ttm)
+        model = self.hestonImpl(params)
 
-    def _getModel(self, params, lim=1000.):
-        return self.hestonImpl(params, integrationLimit=lim, integrationScheme='romb')
+        return model.smile(strike, ttm)
+
 
 class HestonCalibrator:
 
@@ -224,9 +225,11 @@ class HestonCalibrator:
             def obj(params): return sum([sum((self.impl_vol(ti, ki, params) - vi) ** 2.)
                                      for ti, ki, vi in zip(t, strikes, vols)])
 
+        errs = np.geterr()
         np.seterr(all='raise')
         res = opt.minimize(obj, self.getIniParams(iniParams), method=method)
-        calibratedParams = self.getHestonParams(res.x)
+        np.seterr(**errs)
+        calibratedParams = self.getHestonParams(res.x)        
         return calibratedParams, res.fun
 
     def calibrate_to_surface_mc(self, t, strikes, vols, iniParams, nGen=300):
@@ -379,6 +382,7 @@ def testAtmStructure():
                            theta=0.01,
                            xi=1.,
                            rho=0.)
+    market = HestonMarket(domCurve, forCurve, fwdCurve, hParams)
     t = np.concatenate([[1. / 252.], np.arange(1, 4) / 52.,
                         np.arange(1, 25) / 12., np.arange(3., 11.)])  # , [100.]])
     factors = {'var0':-.005, 'theta':-.005,
@@ -423,7 +427,9 @@ def testSmileStructures():
                            theta=0.01,
                            xi=1.,
                            rho=0.)
+    market = HestonMarket(domCurve, forCurve, fwdCurve, hParams)
     ttm = 10.
+    fwd = fwdCurve.fwd(ttm)
     factors = {'var0':-.005, 'theta':-.005,
                'kappa':-0.5, 'xi': 0.8, 'rho':-0.9}
     param = 'rho'

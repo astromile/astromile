@@ -134,8 +134,48 @@ class Test(unittest.TestCase):
         pv_bs = BS(bsp).call(strike, ttm)
         pv_h = HestonSingleIntegration(hp).call(strike, ttm)
 
-        self.assertAlmostEquals(pv_bs, pv_h, 12)
+        self.assertAlmostEquals(pv_bs, pv_h, 7)
 
+    def testImpliedVolComputation(self):
+        spot = 1.6235
+        v0 = 0.001
+        r = 0.025
+        q = 0.04
+
+        kappa = 0.5
+        theta = 0.001
+        xi = 0.1
+        rho = -0.2
+
+        t = 1.
+        dfCHF = np.exp(-r * t)
+        dfEUR = np.exp(-q * t)
+        fwd = spot * dfEUR / dfCHF
+
+        # test isometries
+        p1 = HestonParams(s0=spot,
+                          v0=v0,
+                          r=r,
+                          q=q,
+                          vMeanRevSpeed=kappa,
+                          vLongTermMean=theta,
+                          vVol=xi,
+                          svCorrelation=rho)
+
+        pricer = HestonSingleIntegration(p1, np.inf, 'quad')
+        lm = np.linspace(-0.1, 0.1)
+        smile = []
+        impl_vol = []
+        for lmi in lm:
+            strike = fwd * np.exp(lmi)
+            smile.append(pricer.smile(strike, t))
+            impl_vol.append(pricer.impl_vol(strike, t))
+            print lmi, smile[-1], impl_vol[-1]
+        import matplotlib.pyplot as plt
+        plt.plot(lm, smile, label='smile')
+        plt.plot(lm, impl_vol, label='impl_vol')
+        plt.legend(loc='best')
+        plt.show()
 
 if __name__ == "__main__":
     # import sys;sys.argv = ['', 'Test.testRegression']

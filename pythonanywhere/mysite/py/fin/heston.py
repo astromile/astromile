@@ -24,16 +24,16 @@ class HestonParams:
         self.q = q
         self.kappa = vMeanRevSpeed
         self.theta = vLongTermMean
-        self.vov = vVol
+        self.xi = vVol
         self.rho = svCorrelation
         self.lmbda = priceOfVol
 
     def isFeller(self):
-        return 2. * self.kappa * self.theta > self.vov ** 2
+        return 2. * self.kappa * self.theta > self.xi ** 2
 
     def __str__(self):
         return 'Heston[{}]'.format(' '.join(map(lambda k: '{}={}'.format(k, getattr(self, k)),
-                                                ['s0', 'v0', 'r', 'q', 'kappa', 'theta', 'vov', 'rho'])))
+                                                ['s0', 'v0', 'r', 'q', 'kappa', 'theta', 'xi', 'rho'])))
 
     def __repr__(self):
         return str(self)
@@ -61,6 +61,7 @@ class BS:
         std = self.m.vol * np.sqrt(ttm)
         fwd = self.m.s0 * np.exp((self.m.r - self.m.q) * ttm)
         k = np.log(fwd) - k
+        errs = np.geterr()
         try:
             np.seterr(divide='raise', over='raise')
             d1 = k / std + std / 2.
@@ -69,7 +70,7 @@ class BS:
         except FloatingPointError:
             return np.ones(2) * np.sign(k)
         finally:
-            np.seterr(divide='warn', over='warn')
+            np.seterr(divide=errs['divide'], over=errs['over'])
 
     def impliedVol(self, strike, ttm, pv, callput, guess=None):
         atm = self.m.vol if guess is None else guess
@@ -157,24 +158,27 @@ class Heston93:
         m = self.m
         x = np.log(m.s0)
         a = m.kappa * m.theta
-        b = m.kappa + m.lmbda - (m.rho * m.vov if j == 1 else 0.)
+        b = m.kappa + m.lmbda - (m.rho * m.xi if j == 1 else 0.)
         u = 1.5 - j
-        q = m.rho * m.vov * w * 1j
-        d = np.sqrt((q - b) ** 2 - m.vov ** 2 * (2. * u * w * 1j - w ** 2))
+        q = m.rho * m.xi * w * 1j
+        d = np.sqrt((q - b) ** 2 - m.xi ** 2 * (2. * u * w * 1j - w ** 2))
         gp = b - q + d
         gm = b - q - d
         g = gp / gm
 
-        C = (m.r - m.q) * w * 1j * ttm + a / m.vov ** 2 * (
+        C = (m.r - m.q) * w * 1j * ttm + a / m.xi ** 2 * (
             ttm * gp
             - 2 * np.log((1. - g * np.exp(d * ttm)) / (1. - g))
         )
-        D = gp / m.vov ** 2 \
+        D = gp / m.xi ** 2 \
             * (np.exp(-d * ttm) - 1.) / (np.exp(-d * ttm) - g)
 
         return np.exp(C + D * m.v0 + 1j * w * x)
 
 
+'''
+    see, e.g. https://arxiv.org/pdf/1511.08718.pdf
+'''
 class HestonCommonCF(Heston93):
 
     def __init__(self, params, integrationLimit=np.inf):
@@ -191,21 +195,27 @@ class HestonCommonCF(Heston93):
         m = self.m
 
         alpha = -w / 2. * (w + 1j)
-        beta = m.kappa - m.rho * m.vov * w * 1j
-        gamma = m.vov ** 2 / 2.
+        beta = m.kappa - m.rho * m.xi * w * 1j
+        gamma = m.xi ** 2 / 2.
 
         h = np.sqrt(beta ** 2 - 4. * alpha * gamma)
-        rp = (beta + h) / m.vov ** 2
-        rm = (beta - h) / m.vov ** 2
+        rp = (beta + h) / m.xi ** 2
+        rm = (beta - h) / m.xi ** 2
         g = rm / rp
 
-        C = m.kappa * (rm * ttm - 2. / m.vov ** 2 *
+        under = np.geterr()['under']
+        np.seterr(under='ignore')
+        C = m.kappa * (rm * ttm - 2. / m.xi ** 2 *
                        np.log((1. - g * np.exp(-h * ttm)) / (1. - g)))
         D = rm * (1. - np.exp(-h * ttm)) / (1. - g * np.exp(-h * ttm))
+        cf = np.exp(C * m.theta + D * m.v0 + 1j * w * (np.log(m.s0) + (m.r - m.q) * ttm))
+        np.seterr(under=under)
 
-        return np.exp(C * m.theta + D * m.v0 + 1j * w * (np.log(m.s0) + (m.r - m.q) * ttm))
+        return cf
 
-
+'''
+    see http://www.rogerlord.com/complexlogarithmsheston.pdf
+'''
 class HestonLord(Heston93):
 
     def __init__(self, params, integrationLimit=np.inf):
@@ -215,23 +225,24 @@ class HestonLord(Heston93):
         m = self.m
         x = np.log(m.s0)
         a = m.kappa * m.theta
-        b = m.kappa + m.lmbda - (m.rho * m.vov if j == 1 else 0.)
+        b = m.kappa + m.lmbda - (m.rho * m.xi if j == 1 else 0.)
         u = 1.5 - j
-        q = m.rho * m.vov * w * 1j
-        d = np.sqrt((q - b) ** 2 - m.vov ** 2 * (2. * u * w * 1j - w ** 2))
+        q = m.rho * m.xi * w * 1j
+        d = np.sqrt((q - b) ** 2 - m.xi ** 2 * (2. * u * w * 1j - w ** 2))
         gp = b - q + d
         gm = b - q - d
         g = gp / gm
 
+        under = np.geterr()['under']
         np.seterr(under='ignore')
-        C = (m.r - m.q) * w * 1j * ttm + a / m.vov ** 2 * (
+        C = (m.r - m.q) * w * 1j * ttm + a / m.xi ** 2 * (
             ttm * gm
             - 2 * np.log((np.exp(-d * ttm) - g) / (1. - g))
         )
-        D = gp / m.vov ** 2 \
+        D = gp / m.xi ** 2 \
             * (np.exp(-d * ttm) - 1.) / (np.exp(-d * ttm) - g)
         res = np.exp(C + D * m.v0 + 1j * w * x)
-        np.seterr(under='warn')
+        np.seterr(under=under)
 
         return res
 
@@ -252,7 +263,7 @@ class HestonSingleIntegration(HestonLord):
             i2 = self.integrand(w, 2, k, ttm)
             return (a1 * i1 - a2 * i2) / np.pi
 
-        
+
         if self.integrationScheme == 'quad':
             I = self.integrate_quad(integrand)
         elif self.integrationScheme == 'fixed_quad':
@@ -312,7 +323,7 @@ class HestonSingleIntegration(HestonLord):
         # subdivide for better performance
         a = [1.e-9, 1., 5., 20.] + ([self.integrationLim] if self.integrationLim < np.inf else [400., np.inf])
         k = [4, 5, 6, 9]
-        if self.m.vov > 1.:
+        if self.m.xi > 1.:
             k[0] += 2
         pv = 0.
         for i in xrange(len(a) - 1):
@@ -322,16 +333,17 @@ class HestonSingleIntegration(HestonLord):
                 pvi, _ = spi.quad(integrand, l, r)
                 pv += pvi
             else:
-                pv += spi.romb(integrand(np.linspace(l, r, 2 ** k[i] + 1)),
+                x = np.linspace(l, r, 2 ** k[i] + 1).reshape((1, -1))
+                pv += spi.romb(integrand(x),
                                (r - l) / 2 ** k[i])
 
-        return pv
+        return pv.reshape((-1, 1))
 
     def integrate_romb2(self, integrand):
         # subdivide for better performance
         a = [0., 1., 5., 20.] + ([self.integrationLim] if self.integrationLim < np.inf else [400., np.inf])
         k = [4, 5, 6, 9]
-        if self.m.vov > 1.:
+        if self.m.xi > 1.:
             k[0] += 2
         pv = 0.
         for i in xrange(len(a) - 1):
@@ -415,20 +427,3 @@ class DeltaHelper:
         return strike
 
 
-if __name__ == '__main__':
-    hp = HestonParams(s0=1.,
-                      v0=0.01,
-                      r=0.,
-                      q=0.,
-                      vMeanRevSpeed=1.,
-                      vLongTermMean=0.01,
-                      vVol=0.00001,
-                      svCorrelation=-0.8)
-    bsp = BSParams(s0=hp.s0, r=hp.r, q=hp.q, sVol=np.sqrt(hp.v0))
-    tstart = datetime.datetime.now()
-    print HestonSingleIntegration(hp).call(2., 10.)
-    for _ in xrange(100):
-        HestonSingleIntegration(hp).call(2., 10.)
-    t1 = datetime.datetime.now()
-    print t1 - tstart
-    print BS(bsp).call(2., 10.)
