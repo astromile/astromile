@@ -1,0 +1,6 @@
+.root {
+}
+.label {
+    -fx-font-size: 14;
+    -fx-font-family: monospaced;
+}
