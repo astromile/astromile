@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.storm</groupId>
+        <artifactId>storm</artifactId>
+        <version>${global.version}</version>
+        <relativePath>..</relativePath>
+    </parent>
+
+    <artifactId>storm-fin</artifactId>
+    <packaging>pom</packaging>
+
+    <description>Financial Library</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.storm</groupId>
+            <artifactId>storm-math</artifactId>
+            <version>${global.version}</version>
+        </dependency>
+    </dependencies>
+
+    <modules>
+        <module>storm-fin-common</module>
+        <module>storm-fin-ir</module>
+        <module>storm-fin-fx</module>
+    </modules>
+
+</project>
