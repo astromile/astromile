@@ -7,7 +7,7 @@
 	<parent>
 		<groupId>org.storm</groupId>
 		<artifactId>storm-fin</artifactId>
-		<version>${global.version}</version>
+		<version>${storm.version}</version>
 		<relativePath>..</relativePath>
 	</parent>
 
@@ -19,7 +19,7 @@
 		<dependency>
 			<groupId>org.storm</groupId>
 			<artifactId>storm-fin-common</artifactId>
-			<version>${global.version}</version>
+			<version>${storm.version}</version>
 		</dependency>
 	</dependencies>
 	

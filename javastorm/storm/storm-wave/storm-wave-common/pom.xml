@@ -5,13 +5,13 @@
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>org.storm</groupId>
-        <artifactId>storm</artifactId>
+        <artifactId>storm-wave</artifactId>
         <version>${storm.version}</version>
         <relativePath>..</relativePath>
     </parent>
 
-    <artifactId>storm-com</artifactId>
+    <artifactId>storm-wave-common</artifactId>
 
-    <description>Common utils</description>
+    <description>Common Wave Classes</description>
 
 </project>

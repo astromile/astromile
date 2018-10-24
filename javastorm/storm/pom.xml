@@ -4,9 +4,13 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
+    <properties>
+        <storm.version>0.1-SNAPSHOT</storm.version> <!-- choose different name -->
+    </properties>
+
     <groupId>org.storm</groupId>
     <artifactId>storm</artifactId>
-    <version>${global.version}</version>
+    <version>${storm.version}</version>
     <packaging>pom</packaging>
 
     <!--Historically the first created Maven project-->
@@ -17,11 +21,9 @@
         <module>storm-math</module>
         <module>storm-fin</module>
         <module>storm-jee</module>
+        <module>storm-wave</module>
     </modules>
 
-    <properties>
-        <global.version>0.1-SNAPSHOT</global.version> <!-- choose different name -->
-    </properties>
 
     <dependencies>
         <dependency>
