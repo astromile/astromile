@@ -24,15 +24,34 @@
             </p:column>
         </p:dataTable>
 
-        <p:panelGrid id="context" columns="2" rendered="#{waveRepo.selectedFile!=null}">
-            <p:column>
-                <h:outputText id="selectedFile" value="#{waveRepo.selectedFile}"/>
-            </p:column>
-            <p:commandLink update=":main"
-                           actionListener="#{waveRepo.resetSelectedFile()}">
-                <h:outputText value="Other..."/>
-            </p:commandLink>
+        <p:panelGrid id="scaner" rendered="#{waveRepo.selectedFile!=null}">
+            <p:row>
+                <p:column>
+                    <h:outputText id="selectedFile" value="#{waveRepo.selectedFile}"/>
+                </p:column>
+                <p:column>
+                    <p:commandLink update=":main"
+                                   actionListener="#{waveRepo.resetSelectedFile()}">
+                        Other...
+                    </p:commandLink>
+                </p:column>
+            </p:row>
+
+            <p:row>
+                <p:column colspan="2">
+                    <p:chart type="line" model="#{waveRepo.waveChartModel}"
+                             style="height=300px; width=600px;"/>
+                </p:column>
+            </p:row>
+
+            <p:row>
+                <p:column colspan="2">
+                    <p:chart type="line" model="#{waveRepo.spectrumChartModel}"
+                             style="height=300px; width=700px;"/>
+                </p:column>
+            </p:row>
         </p:panelGrid>
+
     </h:form>
 </h:body>
 </html>

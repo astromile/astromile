@@ -1,5 +1,8 @@
 package storm.wave;
 
+import org.primefaces.model.chart.*;
+
+import javax.annotation.*;
 import javax.enterprise.context.*;
 import javax.inject.*;
 import java.io.*;
@@ -16,6 +19,65 @@ public class WaveFilEJB implements Serializable {
 	private final static Logger LOG = Logger.getLogger(WaveFilEJB.class.getName());
 
 	private WaveFileInfo selectedFile;
+
+	public LineChartModel getWaveChartModel() {
+		return waveChartModel;
+	}
+
+	public LineChartModel getSpectrumChartModel() {
+		return spectrumChartModel;
+	}
+
+	private LineChartModel waveChartModel;
+	private LineChartModel spectrumChartModel;
+
+	@PostConstruct
+	public void init() {
+		createChartModels();
+	}
+
+	private void createChartModels() {
+		waveChartModel = initLinearModel();
+		waveChartModel.setTitle("Original Wave");
+		waveChartModel.setLegendPosition("e");
+		Axis yAxis = waveChartModel.getAxis(AxisType.Y);
+		yAxis.setMin(0);
+		yAxis.setMax(10);
+
+		spectrumChartModel = initLinearModel();
+		spectrumChartModel.setTitle("Wave Spectrum");
+		spectrumChartModel.setLegendPosition("e");
+		yAxis = spectrumChartModel.getAxis(AxisType.Y);
+		yAxis.setMin(0);
+		yAxis.setMax(10);
+	}
+
+	private LineChartModel initLinearModel() {
+		LineChartModel model = new LineChartModel();
+
+		LineChartSeries series1 = new LineChartSeries();
+		series1.setLabel("Left");
+
+		series1.set(1, 2);
+		series1.set(2, 1);
+		series1.set(3, 3);
+		series1.set(4, 6);
+		series1.set(5, 8);
+
+		LineChartSeries series2 = new LineChartSeries();
+		series2.setLabel("Right");
+
+		series2.set(1, 6);
+		series2.set(2, 3);
+		series2.set(3, 2);
+		series2.set(4, 7);
+		series2.set(5, 9);
+
+		model.addSeries(series1);
+		model.addSeries(series2);
+
+		return model;
+	}
 
 	public List<WaveFileInfo> getFiles() {
 		return loadFileInfos();
