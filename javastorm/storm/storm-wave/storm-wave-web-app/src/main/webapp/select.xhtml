@@ -26,6 +26,27 @@
 
         <p:panelGrid id="scaner" rendered="#{waveRepo.selectedFile!=null}">
             <p:row>
+                <p:column colspan="2">
+                    <p:accordionPanel rendered="#{waveRepo.waveData!=null}">
+                        <p:tab title="Wave File Info">
+                            <h:panelGrid columns="2" cellpadding="10">
+                                <h:outputText value="Channels:" style="font-weight: bold"/>
+                                <h:outputText value="#{waveRepo.waveData.info.nbOfChannels}"/>
+
+                                <h:outputText value="Frames:" style="font-weight: bold"/>
+                                <h:outputText value="#{waveRepo.waveData.info.nbOfFrames}"/>
+
+                                <h:outputText value="Frame Rate:" style="font-weight: bold"/>
+                                <h:outputText value="#{waveRepo.waveData.info.frameRate}"/>
+
+                                <h:outputText value="Duration:" style="font-weight: bold"/>
+                                <h:outputText value="#{waveRepo.waveData.info.nbOfChannels} s"/>
+                            </h:panelGrid>
+                        </p:tab>
+                    </p:accordionPanel>
+                </p:column>
+            </p:row>
+            <p:row style="width=1000px;">
                 <p:column>
                     <h:outputText id="selectedFile" value="#{waveRepo.selectedFile}"/>
                 </p:column>
@@ -40,14 +61,14 @@
             <p:row>
                 <p:column colspan="2">
                     <p:chart type="line" model="#{waveRepo.waveChartModel}"
-                             style="height=300px; width=600px;"/>
+                             style="height=300px;"/>
                 </p:column>
             </p:row>
 
             <p:row>
                 <p:column colspan="2">
                     <p:chart type="line" model="#{waveRepo.spectrumChartModel}"
-                             style="height=300px; width=700px;"/>
+                             style="height=300px;"/>
                 </p:column>
             </p:row>
         </p:panelGrid>

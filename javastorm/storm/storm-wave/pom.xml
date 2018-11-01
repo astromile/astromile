@@ -17,7 +17,7 @@
     <description>Wave Library</description>
 
     <modules>
-        <module>storm-wave-common</module>
+        <module>storm-wave-api</module>
         <module>storm-wave-web-app</module>
     </modules>
 

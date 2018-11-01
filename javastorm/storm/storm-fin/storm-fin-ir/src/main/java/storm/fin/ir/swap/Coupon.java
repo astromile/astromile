@@ -6,7 +6,7 @@ import java.time.*;
 
 public interface Coupon {
 
-	DateInterval
+	DateInterval interval();
 
 	LocalDate payDate();
 

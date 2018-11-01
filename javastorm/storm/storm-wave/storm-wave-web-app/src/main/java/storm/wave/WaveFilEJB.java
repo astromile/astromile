@@ -1,6 +1,8 @@
 package storm.wave;
 
 import org.primefaces.model.chart.*;
+import storm.wave.data.*;
+import storm.wave.file.*;
 
 import javax.annotation.*;
 import javax.enterprise.context.*;
@@ -17,8 +19,11 @@ import java.util.stream.*;
 @Named("waveRepo")
 public class WaveFilEJB implements Serializable {
 	private final static Logger LOG = Logger.getLogger(WaveFilEJB.class.getName());
+	private final static String UPLOAD_FOLDER = "c:/tmp/wave/upload";
 
 	private WaveFileInfo selectedFile;
+
+	private WaveData waveData;
 
 	public LineChartModel getWaveChartModel() {
 		return waveChartModel;
@@ -29,8 +34,8 @@ public class WaveFilEJB implements Serializable {
 	}
 
 	private LineChartModel waveChartModel;
-	private LineChartModel spectrumChartModel;
 
+	private LineChartModel spectrumChartModel;
 	@PostConstruct
 	public void init() {
 		createChartModels();
@@ -84,7 +89,7 @@ public class WaveFilEJB implements Serializable {
 	}
 
 	private List<WaveFileInfo> loadFileInfos() {
-		try (Stream<Path> paths = Files.walk(Paths.get("c:/tmp/wave/upload"))) {
+		try (Stream<Path> paths = Files.walk(Paths.get(UPLOAD_FOLDER))) {
 			return paths
 					.filter(Files::isRegularFile)
 					.filter(path -> path.toString().endsWith(".upload"))
@@ -95,7 +100,7 @@ public class WaveFilEJB implements Serializable {
 							long size = attributes.size();
 							LocalDateTime uploaded = LocalDateTime.ofInstant(attributes.creationTime().toInstant(),
 									ZoneOffset.ofHours(2));
-							return WaveFileInfo.of(originalFileName, size, uploaded);
+							return WaveFileInfo.of(originalFileName, path.getFileName(), size, uploaded);
 						} catch (Exception e) {
 							LOG.warning("Failed extracting information about " + path.getFileName() + ": " + e);
 							return null;
@@ -107,12 +112,24 @@ public class WaveFilEJB implements Serializable {
 		}
 	}
 
+	public WaveData getWaveData() {
+		return waveData;
+	}
+
 	public WaveFileInfo getSelectedFile() {
 		return selectedFile;
 	}
 
 	public void setSelectedFile(WaveFileInfo selectedFile) {
 		this.selectedFile = selectedFile;
+		try {
+			File file = Paths.get(UPLOAD_FOLDER).resolve(selectedFile.getPath()).toFile();
+			WavFile wavFile = WavFile.openWavFile(file);
+			waveData = WaveFileData.of(wavFile);
+		} catch (Exception e) {
+
+			LOG.severe("Failed loading file " + selectedFile.getName());
+		}
 	}
 
 	public void resetSelectedFile() {

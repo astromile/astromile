@@ -38,6 +38,11 @@
             <artifactId>jsf-api</artifactId>
             <version>2.1</version>
         </dependency>
+        <dependency>
+            <groupId>org.storm</groupId>
+            <artifactId>storm-wave-api</artifactId>
+            <version>${storm.version}</version>
+        </dependency>
     </dependencies>
 
     <build>
