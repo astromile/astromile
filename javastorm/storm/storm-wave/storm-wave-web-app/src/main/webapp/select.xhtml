@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
         "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:h="http://xmlns.jcp.org/jsf/html"
-      xmlns:p="http://primefaces.org/ui">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:h="http://xmlns.jcp.org/jsf/html"
+      xmlns:p="http://primefaces.org/ui"
+>
 <h:head>
     <title>Wave Scaner View</title>
 </h:head>
@@ -24,55 +26,40 @@
             </p:column>
         </p:dataTable>
 
-        <p:panelGrid id="scaner" rendered="#{waveRepo.selectedFile!=null}">
-            <p:row>
-                <p:column colspan="2">
-                    <p:accordionPanel rendered="#{waveRepo.waveData!=null}">
-                        <p:tab title="Wave File Info">
-                            <h:panelGrid columns="2" cellpadding="10">
-                                <h:outputText value="Channels:" style="font-weight: bold"/>
-                                <h:outputText value="#{waveRepo.waveData.info.nbOfChannels}"/>
+        <p:accordionPanel id="accordion" rendered="#{waveRepo.selectedFile!=null}"
+                          multiple="true" dynamic="true">
+            <p:tab title="Wave File Info">
+                <h:panelGrid columns="2" cellpadding="10">
+                    <h:outputText value="File:" style="font-weight: bold"/>
+                    <h:outputText value="#{waveRepo.selectedFile}"/>
 
-                                <h:outputText value="Frames:" style="font-weight: bold"/>
-                                <h:outputText value="#{waveRepo.waveData.info.nbOfFrames}"/>
+                    <h:outputText value="Channels:" style="font-weight: bold"/>
+                    <h:outputText value="#{waveRepo.waveData.info.nbOfChannels}"/>
 
-                                <h:outputText value="Frame Rate:" style="font-weight: bold"/>
-                                <h:outputText value="#{waveRepo.waveData.info.frameRate}"/>
+                    <h:outputText value="Frames:" style="font-weight: bold"/>
+                    <h:outputText value="#{waveRepo.waveData.info.nbOfFrames}"/>
 
-                                <h:outputText value="Duration:" style="font-weight: bold"/>
-                                <h:outputText value="#{waveRepo.waveData.info.getDuration()} s"/>
-                            </h:panelGrid>
-                        </p:tab>
-                    </p:accordionPanel>
-                </p:column>
-            </p:row>
-            <p:row style="width=1000px;">
-                <p:column>
-                    <h:outputText id="selectedFile" value="#{waveRepo.selectedFile}"/>
-                </p:column>
-                <p:column>
+                    <h:outputText value="Frame Rate:" style="font-weight: bold"/>
+                    <h:outputText value="#{waveRepo.waveData.info.frameRate}"/>
+
+                    <h:outputText value="Duration:" style="font-weight: bold"/>
+                    <h:outputText value="#{waveRepo.waveData.info.getDuration()} s"/>
+
                     <p:commandLink update=":main"
                                    actionListener="#{waveRepo.resetSelectedFile()}">
-                        Other...
+                        Select other...
                     </p:commandLink>
-                </p:column>
-            </p:row>
-
-            <p:row>
-                <p:column colspan="2">
-                    <p:chart type="line" model="#{waveRepo.waveChartModel}"
-                             style="height=300px;"/>
-                </p:column>
-            </p:row>
-
-            <p:row>
-                <p:column colspan="2">
-                    <p:chart type="line" model="#{waveRepo.spectrumChartModel}"
-                             style="height=300px;"/>
-                </p:column>
-            </p:row>
-        </p:panelGrid>
-
+                </h:panelGrid>
+            </p:tab>
+            <p:tab title="Wave Chart">
+                <p:chart type="line" model="#{waveRepo.waveChartModel}"
+                         style="height=500px;"/>
+            </p:tab>
+            <p:tab title="Spectrum Chart">
+                <p:chart type="line" model="#{waveRepo.spectrumChartModel}"
+                         style="height=500px;"/>
+            </p:tab>
+        </p:accordionPanel>
     </h:form>
 </h:body>
 </html>
