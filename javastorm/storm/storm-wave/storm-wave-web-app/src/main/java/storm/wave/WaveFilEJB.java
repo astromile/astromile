@@ -47,7 +47,7 @@ public class WaveFilEJB implements Serializable {
 		waveChartModel.setLegendPosition("e");
 		Axis yAxis = waveChartModel.getAxis(AxisType.Y);
 		yAxis.setMin(0);
-		yAxis.setMax(10);
+		yAxis.setMax(1);
 
 		spectrumChartModel = initLinearModel();
 		spectrumChartModel.setTitle("Wave Spectrum");
@@ -121,15 +121,41 @@ public class WaveFilEJB implements Serializable {
 	}
 
 	public void setSelectedFile(WaveFileInfo selectedFile) {
+		if (selectedFile == null) {return;}
 		this.selectedFile = selectedFile;
 		try {
 			File file = Paths.get(UPLOAD_FOLDER).resolve(selectedFile.getPath()).toFile();
 			WavFile wavFile = WavFile.openWavFile(file);
 			waveData = WaveFileData.of(wavFile);
+			updateCharts();
 		} catch (Exception e) {
 
 			LOG.severe("Failed loading file " + selectedFile.getName());
 		}
+	}
+
+	private void updateCharts() {
+		waveChartModel.getSeries().clear();
+		int nbOfChannels = waveData.getInfo().getNbOfChannels();
+		IntStream.range(0, nbOfChannels).mapToObj(i -> Channel.of(i, nbOfChannels)).map(this::waveSeries)
+				.forEach(waveChartModel.getSeries()::add);
+	}
+
+	private LineChartSeries waveSeries(Channel channel) {
+		double[] wave = waveData.getWave(channel).wave();
+		LineChartSeries series = new LineChartSeries(channel.getName());
+		int nbOfPoints = 100;
+		int sampleStep = wave.length / nbOfPoints;
+		double[] x = new double[nbOfPoints];
+		double[] y = new double[nbOfPoints];
+		for (int i = 0; i < nbOfPoints; ++i) {
+			x[i] = (0.5 + i) * sampleStep / waveData.getInfo().getFrameRate();
+			y[i] = IntStream.range(i * sampleStep, (i + 1) * sampleStep).mapToDouble(j -> Math.abs(wave[j]))
+					.average().getAsDouble();
+		}
+		double maxAmplitude = DoubleStream.of(y).max().getAsDouble();
+		IntStream.range(0, nbOfPoints).forEach(i -> series.set(x[i], y[i] / maxAmplitude));
+		return series;
 	}
 
 	public void resetSelectedFile() {
