@@ -15,6 +15,11 @@
             <artifactId>storm-com</artifactId>
             <version>${storm.version}</version>
         </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-math3</artifactId>
+            <version>RELEASE</version>
+        </dependency>
     </dependencies>
 
     <artifactId>storm-wave-api</artifactId>

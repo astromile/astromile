@@ -3,6 +3,8 @@ package storm.wave;
 import org.primefaces.model.chart.*;
 import storm.wave.data.*;
 import storm.wave.file.*;
+import storm.wave.note.*;
+import storm.wave.spectrum.*;
 
 import javax.annotation.*;
 import javax.enterprise.context.*;
@@ -20,6 +22,7 @@ import java.util.stream.*;
 public class WaveFilEJB implements Serializable {
 	private final static Logger LOG = Logger.getLogger(WaveFilEJB.class.getName());
 	private final static String UPLOAD_FOLDER = "c:/tmp/wave/upload";
+	private final static boolean MOCK_SECOND_CHANNEL = true;
 
 	private WaveFileInfo selectedFile;
 
@@ -129,7 +132,6 @@ public class WaveFilEJB implements Serializable {
 			waveData = WaveFileData.of(wavFile);
 			updateCharts();
 		} catch (Exception e) {
-
 			LOG.severe("Failed loading file " + selectedFile.getName());
 		}
 	}
@@ -139,11 +141,30 @@ public class WaveFilEJB implements Serializable {
 		int nbOfChannels = waveData.getInfo().getNbOfChannels();
 		IntStream.range(0, nbOfChannels).mapToObj(i -> Channel.of(i, nbOfChannels)).map(this::waveSeries)
 				.forEach(waveChartModel.getSeries()::add);
+		if (nbOfChannels == 1 && MOCK_SECOND_CHANNEL) {
+			waveChartModel.getSeries().add(waveSeries(Channels.Mono));
+			waveChartModel.getSeries().get(0).setLabel(Channels.Left.getName());
+			waveChartModel.getSeries().get(1).setLabel(Channels.Right.getName());
+		}
+
+		spectrumChartModel.getSeries().clear();
+		IntStream.range(0, nbOfChannels).mapToObj(i -> Channel.of(i, nbOfChannels)).map(this::spectrumSeries)
+				.forEach(spectrumChartModel.getSeries()::add);
+	}
+
+	private LineChartSeries spectrumSeries(Channel channel) {
+		LineChartSeries series = new LineChartSeries(channel.getName());
+		SpectrumGenerator generator = SpectrumGenerator
+				.aggregated(waveData.getInfo(), waveData.getWave(channel), Octaves.SecondOctave.getBitches());
+		WaveSpectrum spectrum = generator.generate(TimeWindow.of(0, waveData.getInfo().getDuration()));
+		spectrum.points().stream().forEach(p -> series.set(p.frequency(), p.amplitude()));
+		return series;
 	}
 
 	private LineChartSeries waveSeries(Channel channel) {
-		double[] wave = waveData.getWave(channel).wave();
 		LineChartSeries series = new LineChartSeries(channel.getName());
+		series.setShowMarker(false);
+		double[] wave = waveData.getWave(channel).wave();
 		int nbOfPoints = 100;
 		int sampleStep = wave.length / nbOfPoints;
 		double[] x = new double[nbOfPoints];
