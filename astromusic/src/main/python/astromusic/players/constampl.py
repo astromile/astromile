@@ -10,14 +10,14 @@ import sounddevice as sd
 class ConstAmplPlayer:
     MAX_AMPL = 2 ** 15 - 1
 
-    def __init__(self, blocksize=2205, buffersize=20, samplerate=44100):
+    def __init__(self, blocksize=2205, buffersize=20, samplerate=44100, freq=440):
         self.blocksize = blocksize
         self.buffersize = buffersize
         self.samplerate = samplerate
 
         self.queue = queue.Queue(maxsize=buffersize)
         self.event = threading.Event()
-        self.freq = 440
+        self.freq = freq
         self.is_running = False
         self.offset = 0
         self.dt = 1 / self.samplerate
