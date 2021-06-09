@@ -129,9 +129,9 @@ class ConstAmplPlayer:
             data = self.queue.get_nowait()
         return data
 
-    def stop(self):
+    def stop(self, blocking=True):
         self.is_running = False
-        if self.thread is not None:
+        if blocking and self.thread is not None:
             self.thread.join()
             self.thread = None
         if not self.queue.empty():
@@ -165,9 +165,10 @@ class ConstAmplPlayer:
             self.freq_scala = self.ui.HBox([self.ui.Label()]
                                            + [self.ui.Label(value=self.TONE[i % 12], layout=layout)
                                               for i in range(self.TONES + 1)])
-
             if fig is None or ax is None:
+                self.plt.ioff()
                 self.fig, self.ax = self.plt.subplots()
+                self.plt.ion()
             else:
                 self.fig, self.ax = fig, ax
             self.plot(show=False)
@@ -184,7 +185,7 @@ class ConstAmplPlayer:
         def show(self):
             from IPython.display import display
             display(self.ui.HBox([self.start_button, self.stop_button, self.freq_label]),
-                    self.freq_slider, self.freq_scala)  # , self.fig)
+                    self.freq_slider, self.freq_scala, self.fig)
 
         def set_freq(self, e):
             self.player.set_freq(self.base_freq * self.HALFTONE ** e.new)
