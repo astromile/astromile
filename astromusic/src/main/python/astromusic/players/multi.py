@@ -131,9 +131,9 @@ class MultiTonePlayer:
         def show(self):
             from IPython.display import display
             if plt.get_backend() == 'module://ipympl.backend_nbagg':
-                display(self.fig.canvas, self.switch_all, *self.tones)
+                display(self.switch_all, *self.tones, self.fig.canvas)
             else:
-                display(self.fig, self.switch_all, *self.tones)
+                display(self.switch_all, *self.tones, self.fig)
 
         def on_switch_all(self, e):
             for tone in self.tones:
