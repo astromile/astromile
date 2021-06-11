@@ -3,8 +3,37 @@ import sys
 import threading
 import time
 
+import matplotlib.pyplot as plt
 import numpy as np
 import sounddevice as sd
+
+from astromusic.players.player import SinWave, Player
+
+
+class VaryFreqWave(SinWave):
+    def __init__(self, amplitude=1, freq=440, phase=0):
+        super().__init__(amplitude, freq, phase)
+        self.frequeue = queue.Queue()
+
+    def set_freq(self, freq):
+        self.frequeue.put_nowait(freq)
+
+    def wave(self, t):
+        new_freq = self.freq
+        while not self.frequeue.empty():
+            new_freq = self.frequeue.get_nowait()
+        if self.freq != new_freq:
+            """ magic to smoothly jump from one wave line to another one """
+            dt = t[1] - t[0]
+            prv, nxt = super().wave(np.array([t[0] - dt, t[0]]))
+            x = np.arcsin(nxt / self.amplitude)  # point of intercept: A * sin(x) == Signal(old freq, t[0])
+            if prv > nxt:
+                x = np.pi - x
+            # phase of intercept for new freq: A * sin(x) = A * sin(2 * pi * freq * t0 + phase)
+            self.phase = (x - 2 * np.pi * new_freq * t[0])  # % (2 * np.pi)
+            self.freq = new_freq
+
+        return super().wave(t)
 
 
 class ConstAmplPlayer:
@@ -59,16 +88,6 @@ class ConstAmplPlayer:
                     offset = np.pi - offset
                 w = np.sin(offset + 2 * np.pi * self.freq * self.t)
                 self.offset = offset / (2 * np.pi * self.freq) + self.blocksize / self.samplerate
-
-            #             w = (2 ** 15 - 1) * np.sin(2 * np.pi * old_freq * (self.offset + self.t))
-            #             tswitch = np.arange(0, len(self.t) - 1)[(w[:-1] < 0) & (w[1:] >= 0)][0] + 1
-            #             self.offset = w[tswitch] / (w[tswitch] - w[tswitch - 1]) * (self.t[tswitch] - self.t[tswitch - 1])
-            #             w[tswitch:] = (2 ** 15 - 1) * np.sin(2 * np.pi * self.freq * (self.offset + self.t[:-tswitch]))
-
-            # self.offset = self.t[-tswitch]
-            #             w *= self.t / self.t[-1]
-            #             w += (2 ** 15 - 1) * (self.t[-1]-self.t) / self.t[-1] \
-            #             * np.sin(2 * np.pi * old_freq * (self.offset + self.t))
             else:
                 self.offset += self.blocksize / self.samplerate
 
@@ -87,9 +106,7 @@ class ConstAmplPlayer:
 
     def run(self):
         self.offset = 0.0
-        i = 0
-        for i in range(self.buffersize):
-            self.queue.put_nowait(self.wave())
+        [self.queue.put_nowait(self.wave()) for _ in range(self.buffersize)]
 
         with sd.RawOutputStream(samplerate=self.samplerate,
                                 blocksize=self.blocksize,
@@ -104,7 +121,6 @@ class ConstAmplPlayer:
                     if freq != self.freq:
                         if self.is_running:
                             self.queue.put(self.wave(freq))
-                        i += 1
                         freq = self.freq
                     else:
                         if self.is_running:
@@ -197,3 +213,94 @@ class ConstAmplPlayer:
 
         def stop(self, _):
             self.player.stop()
+
+
+class UI:
+    import ipywidgets as ui
+    import matplotlib.pyplot as plt
+    HALFTONE = 2 ** (1 / 12)
+    TONES = 36
+    TONE = ['A', 'A#', 'H', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#']
+
+    def __init__(self, blocksize=4410, buffersize=2, samplerate=44100, freq=440):
+        self.wave = VaryFreqWave(freq=freq)
+        self.display_wave = VaryFreqWave(freq=freq)
+        self.player = Player(wave=self.wave, blocksize=blocksize, buffersize=buffersize, samplerate=samplerate)
+        self.base_freq = freq / 2
+
+        self.freq_label = self.ui.Label(value=f'{self.wave.freq} Hz')
+
+        self.start_button = self.ui.Button(description='Start')
+        self.start_button.on_click(self.start)
+
+        self.stop_button = self.ui.Button(description='Stop')
+        self.stop_button.on_click(self.stop)
+
+        self.freq_slider = self.ui.IntSlider(value=12, min=0, max=self.TONES, step=1,
+                                             layout=self.ui.Layout(width='100%'))
+        self.freq_slider.observe(self.set_freq, names='value')
+
+        layout = self.ui.Layout(width='2.12%')
+        self.freq_scala = self.ui.HBox([self.ui.Label()]
+                                       + [self.ui.Label(value=self.TONE[i % 12], layout=layout)
+                                          for i in range(self.TONES + 1)])
+        self.plt.ioff()
+        self.fig, self.ax = self.plt.subplots()
+        self.plt.ion()
+        self.plot()
+
+    def plot(self):
+        self.ax.clear()
+        self.display_wave.freq = self.freq()
+        self.ax.plot(self.player.t, self.display_wave.wave(self.player.t))
+        self.ax.set_xlim(0, 1 / self.base_freq)
+        self.ax.grid()
+
+    # noinspection PyTypeChecker
+    def show(self):
+        from IPython.display import display
+        fig = self.fig if plt.get_backend() == 'nbAgg' else self.fig.canvas
+        display(self.ui.HBox([self.start_button, self.stop_button, self.freq_label]),
+                self.freq_slider, self.freq_scala, fig)
+
+    def set_freq(self, _):
+        freq = self.freq()
+        self.wave.set_freq(freq)
+        self.freq_label.value = f'{round(100 * freq) / 100} Hz'
+        self.plot()
+
+    def freq(self):
+        # noinspection PyTypeChecker
+        return self.base_freq * self.HALFTONE ** self.freq_slider.value
+
+    def start(self, _):
+        self.player.start()
+
+    def stop(self, _):
+        self.player.stop()
+
+
+def _test_vary_freq():
+    ht = 2 ** (1 / 12)
+    wave = VaryFreqWave(freq=440 * ht)
+    player = Player(wave)
+    player.start()
+    for _ in range(10):
+        # time.sleep(np.random.rand())
+        old_freq = wave.freq
+        new_freq = 440 * ht ** np.random.randint(1, 12)
+        wave.set_freq(new_freq)
+        print(old_freq, '->', new_freq)
+    for _ in range(10):
+        time.sleep(np.random.rand())
+        old_freq = wave.freq
+        new_freq = 440 * ht ** np.random.randint(1, 12)
+        wave.set_freq(new_freq)
+        print(old_freq, '->', new_freq)
+
+    time.sleep(1)
+    player.stop()
+
+
+if __name__ == '__main__':
+    _test_vary_freq()
