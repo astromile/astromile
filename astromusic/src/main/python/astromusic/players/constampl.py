@@ -8,6 +8,7 @@ import numpy as np
 import sounddevice as sd
 
 from astromusic.players.player import SinWave, Player
+from astromusic.util import deprecated
 
 
 class VaryFreqWave(SinWave):
@@ -36,6 +37,7 @@ class VaryFreqWave(SinWave):
         return super().wave(t)
 
 
+@deprecated("Use combination Player and VaryFreqWave")
 class ConstAmplPlayer:
     MAX_AMPL = 2 ** 15 - 1
 
@@ -153,6 +155,7 @@ class ConstAmplPlayer:
         if not self.queue.empty():
             self.clear_queue()
 
+    @deprecated('Use players.constampl.UI class instead.')
     class UI:
         import ipywidgets as ui
         import matplotlib.pyplot as plt
