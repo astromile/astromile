@@ -3,6 +3,7 @@ import sys
 import threading
 import time
 
+import ipywidgets as ui
 import matplotlib.pyplot as plt
 import numpy as np
 import sounddevice as sd
@@ -218,8 +219,7 @@ class ConstAmplPlayer:
             self.player.stop()
 
 
-class UI:
-    import ipywidgets as ui
+class UI(ui.VBox):
     import matplotlib.pyplot as plt
     HALFTONE = 2 ** (1 / 12)
     TONES = 36
@@ -231,26 +231,35 @@ class UI:
         self.player = Player(wave=self.wave, blocksize=blocksize, buffersize=buffersize, samplerate=samplerate)
         self.base_freq = freq / 2
 
-        self.freq_label = self.ui.Label(value=f'{self.wave.freq} Hz')
+        self.freq_label = ui.Label(value=f'{self.wave.freq} Hz')
 
-        self.start_button = self.ui.Button(description='Start')
+        self.start_button = ui.Button(description='Start')
         self.start_button.on_click(self.start)
 
-        self.stop_button = self.ui.Button(description='Stop')
+        self.stop_button = ui.Button(description='Stop')
         self.stop_button.on_click(self.stop)
 
-        self.freq_slider = self.ui.IntSlider(value=12, min=0, max=self.TONES, step=1,
-                                             layout=self.ui.Layout(width='100%'))
+        self.freq_slider = ui.IntSlider(value=12, min=0, max=self.TONES, step=1, readout=False,
+                                        layout=ui.Layout(width='100%', margin='0', padding='10px'))
         self.freq_slider.observe(self.set_freq, names='value')
 
-        layout = self.ui.Layout(width='2.12%')
-        self.freq_scala = self.ui.HBox([self.ui.Label()]
-                                       + [self.ui.Label(value=self.TONE[i % 12], layout=layout)
-                                          for i in range(self.TONES + 1)])
+        layout = ui.Layout(width='2.27%', display='flex', justify_content='center')
+        self.freq_scala = ui.HBox([ui.Label()]
+                                  + [ui.Label(value=self.TONE[i % 12], layout=layout)
+                                     for i in range(self.TONES + 1)])
         self.plt.ioff()
         self.fig, self.ax = self.plt.subplots()
         self.plt.ion()
         self.plot()
+
+        fig = self.fig if plt.get_backend() == 'nbAgg' else self.fig.canvas
+
+        super().__init__([
+            ui.HBox([self.start_button, self.stop_button, self.freq_label]),
+            self.freq_slider,
+            self.freq_scala,
+            fig
+        ])
 
     def plot(self):
         self.ax.clear()
@@ -258,13 +267,6 @@ class UI:
         self.ax.plot(self.player.t, self.display_wave.wave(self.player.t))
         self.ax.set_xlim(0, 1 / self.base_freq)
         self.ax.grid()
-
-    # noinspection PyTypeChecker
-    def show(self):
-        from IPython.display import display
-        fig = self.fig if plt.get_backend() == 'nbAgg' else self.fig.canvas
-        display(self.ui.HBox([self.start_button, self.stop_button, self.freq_label]),
-                self.freq_slider, self.freq_scala, fig)
 
     def set_freq(self, _):
         freq = self.freq()
