@@ -12,30 +12,76 @@ from astromusic.players.player import SinWave, Player
 from astromusic.util import deprecated
 
 
-class VaryFreqWave(SinWave):
+class VariableWave(SinWave):
+    class Param:
+        Frequency = 'freq'
+        Amplitude = 'amplitude'
+        Phase = 'phase'
+
+    class Message:
+        def __init__(self, param, value):
+            self.param = param
+            self.value = value
+
     def __init__(self, amplitude=1, freq=440, phase=0):
         super().__init__(amplitude, freq, phase)
-        self.frequeue = queue.Queue()
+        self.messages = queue.Queue()
+
+    def modify(self, param, value):
+        self.messages.put_nowait(self.Message(param, value))
 
     def set_freq(self, freq):
-        self.frequeue.put_nowait(freq)
+        self.modify(self.Param.Frequency, freq)
+
+    def set_amplitude(self, amplitude):
+        self.modify(self.Param.Amplitude, amplitude)
+
+    def set_phase(self, phase):
+        self.modify(self.Param.Phase, phase)
 
     def wave(self, t):
-        new_freq = self.freq
-        while not self.frequeue.empty():
-            new_freq = self.frequeue.get_nowait()
-        if self.freq != new_freq:
+        freq = self.freq
+        amplitude = self.amplitude
+        phase = self.phase
+        while not self.messages.empty():
+            message = self.messages.get_nowait()
+            if message.param == self.Param.Frequency:
+                freq = message.value
+            elif message.param == self.Param.Amplitude:
+                amplitude = message.value
+            elif message.param == self.Param.Phase:
+                phase = message.value
+            else:
+                pass  # skip unknown message
+
+        if self.phase != phase:
+            self.phase = phase
+            self.freq = freq
+
+        elif self.freq != freq:
             """ magic to smoothly jump from one wave line to another one """
             dt = t[1] - t[0]
             prv, nxt = super().wave(np.array([t[0] - dt, t[0]]))
-            x = np.arcsin(nxt / self.amplitude)  # point of intercept: A * sin(x) == Signal(old freq, t[0])
+            x = np.arcsin(
+                nxt / self.amplitude if self.amplitude != 0.0 else 0.0)  # point of intercept: A * sin(x) == Signal(old freq, t[0])
             if prv > nxt:
                 x = np.pi - x
             # phase of intercept for new freq: A * sin(x) = A * sin(2 * pi * freq * t0 + phase)
-            self.phase = (x - 2 * np.pi * new_freq * t[0])  # % (2 * np.pi)
-            self.freq = new_freq
+            self.phase = (x - 2 * np.pi * freq * t[0])  # % (2 * np.pi)
+            self.freq = freq
 
-        return super().wave(t)
+        if self.amplitude != amplitude:
+            if amplitude == 0.0:
+                smoother = (t[-1] - t) / (t[-1] - t[0])
+                wave = super().wave(t) * smoother
+                self.amplitude = amplitude
+                return wave
+            else:
+                smoother = (self.amplitude / amplitude * (t[-1] - t) + t - t[0]) / (t[-1] - t[0])
+                self.amplitude = amplitude
+                return super().wave(t) * smoother
+        else:
+            return super().wave(t)
 
 
 @deprecated("Use combination Player and VaryFreqWave")
@@ -226,8 +272,8 @@ class UI(ui.VBox):
     TONE = ['A', 'A#', 'H', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#']
 
     def __init__(self, blocksize=4410, buffersize=2, samplerate=44100, freq=440):
-        self.wave = VaryFreqWave(freq=freq)
-        self.display_wave = VaryFreqWave(freq=freq)
+        self.wave = VariableWave(freq=freq)
+        self.display_wave = VariableWave(freq=freq)
         self.player = Player(wave=self.wave, blocksize=blocksize, buffersize=buffersize, samplerate=samplerate)
         self.base_freq = freq / 2
 
@@ -287,7 +333,7 @@ class UI(ui.VBox):
 
 def _test_vary_freq():
     ht = 2 ** (1 / 12)
-    wave = VaryFreqWave(freq=440 * ht)
+    wave = VariableWave(freq=440 * ht)
     player = Player(wave)
     player.start()
     for _ in range(10):
