@@ -38,6 +38,12 @@ class SingleToneUI(ui.HBox):
                     layout=ui.Layout(width='88%'))
         ])
 
+    def is_on(self):
+        return self.play_checkbox.value
+
+    def switch(self, on):
+        self.play_checkbox.value = on
+
     def on_play_checkbox(self, e):
         # if e.new:
         #     self.player.start()
@@ -82,8 +88,7 @@ class UI(ui.VBox):
         ])
 
     def on_switch_all(self, e):
-        for tone in self.tones:
-            tone.play_checkbox.value = e.new
+        [tone.switch(e.new) for tone in self.tones]
 
     def on_freq_change(self, *_):
         self.plot()
@@ -100,7 +105,7 @@ class UI(ui.VBox):
         for widget, player in zip(self.tones, self.players):
             t = player.t
             freq = widget.wave.freq
-            style = '-' if widget.play_checkbox.value else '--'
+            style = '-' if widget.is_on() else '--'
             self.ax.plot(t, np.sin(2 * np.pi * freq * t), style,
                          label=f'{widget.play_checkbox.description} : {round(100 * freq) / 100} Hz')
         self.ax.legend(loc='upper left')
@@ -134,11 +139,12 @@ class MergedWaveUI(ui.VBox):
             self.waves.append(wave)
             self.tones.append(widget)
 
+        self.display_wave = MultiWave(*[VariableWave(freq=freq, amplitude=1.0) for _ in range(tone_count)])
         self.player = Player(MultiWave(*self.waves), blocksize=blocksize, buffersize=buffersize, samplerate=samplerate)
         self.player.start()
 
         plt.ioff()
-        self.fig, self.ax = plt.subplots(figsize=[8, 3])
+        self.fig, self.ax = plt.subplots(nrows=2, ncols=1, figsize=[8, 3])
         self.fig.tight_layout()
         plt.ion()
         self.plot()
@@ -154,8 +160,7 @@ class MergedWaveUI(ui.VBox):
         self.player.stop(blocking=False)
 
     def on_switch_all(self, e):
-        for tone in self.tones:
-            tone.play_checkbox.value = e.new
+        [tone.switch(e.new) for tone in self.tones]
 
     def on_freq_change(self, wave_id, freq):
         self.plot()
@@ -165,4 +170,25 @@ class MergedWaveUI(ui.VBox):
         self.plot()
 
     def plot(self):
-        pass
+        for ax in self.ax:
+            ax.clear()
+        ax = self.ax[0]
+        for i, widget in enumerate(self.tones):
+            t = self.player.t
+            wave = self.display_wave.waves[i]
+            wave.freq = widget.wave.freq
+            wave.amplitude = 1.0
+            wave.phase = widget.wave.phase
+            style = '-' if widget.is_on() else '--'
+            ax.plot(t, wave.wave(t), style,
+                    label=f'{widget.play_checkbox.description} : {round(100 * widget.wave.freq) / 100} Hz')
+
+            wave.amplitude = widget.wave.amplitude
+        ax.legend(loc='upper left')
+        ax.set_xlim(0, 4 / 220)
+        ax.grid()
+
+        ax = self.ax[1]
+        ax.plot(t, self.display_wave.wave(t))
+        ax.set_xlim(0, 4 / 200)
+        ax.grid()
