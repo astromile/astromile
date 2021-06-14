@@ -190,5 +190,5 @@ class MergedWaveUI(ui.VBox):
 
         ax = self.ax[1]
         ax.plot(t, self.display_wave.wave(t))
-        ax.set_xlim(0, 4 / 200)
+        # ax.set_xlim(0, self.player.blocksize / self.player.samplerate)
         ax.grid()
