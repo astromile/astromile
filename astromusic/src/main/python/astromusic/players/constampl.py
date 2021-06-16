@@ -266,7 +266,6 @@ class ConstAmplPlayer:
 
 
 class UI(ui.VBox):
-    import matplotlib.pyplot as plt
     HALFTONE = 2 ** (1 / 12)
     TONES = 36
     TONE = ['A', 'A#', 'H', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#']
@@ -293,41 +292,57 @@ class UI(ui.VBox):
         self.freq_scala = ui.HBox([ui.Label()]
                                   + [ui.Label(value=self.TONE[i % 12], layout=layout)
                                      for i in range(self.TONES + 1)])
-        self.plt.ioff()
-        self.fig, self.ax = self.plt.subplots()
-        self.plt.ion()
-        self.plot()
+        plt.ioff()
+        self.fig, self.ax = plt.subplots()
+        # plt.ion()  # interactive mode should stay off, otherwise dynamic plot will exhibit graphical artefacts
+        self.offset = 0
 
-        fig = self.fig if plt.get_backend() == 'nbAgg' else self.fig.canvas
+        self.queue = queue.Queue()
+        self.queue.put_nowait('stop')
 
         super().__init__([
             ui.HBox([self.start_button, self.stop_button, self.freq_label]),
             self.freq_slider,
             self.freq_scala,
-            fig
+            self.fig.canvas
         ])
+
+        self.plot()
 
     def plot(self):
         self.ax.clear()
         self.display_wave.freq = self.freq()
-        self.ax.plot(self.player.t, self.display_wave.wave(self.player.t))
-        self.ax.set_xlim(0, 1 / self.base_freq)
+        t = self.offset + np.linspace(0, 1 / self.base_freq, 101)
+        self.ax.plot(t, self.display_wave.wave(t))
+        self.ax.set_xlim(t[0], t[-1])
         self.ax.grid()
+        self.fig.canvas.draw()
 
     def set_freq(self, _):
         freq = self.freq()
         self.wave.set_freq(freq)
         self.freq_label.value = f'{round(100 * freq) / 100} Hz'
-        self.plot()
+        if not self.queue.empty():
+            self.plot()
 
     def freq(self):
         # noinspection PyTypeChecker
         return self.base_freq * self.HALFTONE ** self.freq_slider.value
 
     def start(self, _):
+        while not self.queue.empty():
+            self.queue.get_nowait()
+        threading.Thread(target=self.run).start()
         self.player.start()
 
+    def run(self):
+        while self.queue.empty():
+            self.plot()
+            time.sleep(0.01)
+            self.offset += 1 / self.base_freq / 20
+
     def stop(self, _):
+        self.queue.put_nowait('stop')
         self.player.stop()
 
 

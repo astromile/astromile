@@ -125,9 +125,9 @@ class Player:
     def play(wave):
         if isinstance(wave, list) or isinstance(wave, tuple):
             wave = np.array(wave)
-        if isinstance(wave, np.ndarray):
-            wave = wave.tobytes()
         if isinstance(wave, bytes):
+            wave = np.frombuffer(wave, dtype=np.int16)
+        if isinstance(wave, np.ndarray):
             sd.play(wave)
         else:
             raise TypeError(f'Unsupported type of wave: {type(wave)}')
