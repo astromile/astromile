@@ -278,11 +278,8 @@ class UI(ui.VBox):
 
         self.freq_label = ui.Label(value=f'{self.wave.freq} Hz')
 
-        self.start_button = ui.Button(description='Start')
-        self.start_button.on_click(self.start)
-
-        self.stop_button = ui.Button(description='Stop')
-        self.stop_button.on_click(self.stop)
+        self.button = ui.Button(icon='fa-play')
+        self.button.on_click(self.switch)
 
         self.freq_slider = ui.IntSlider(value=12, min=0, max=self.TONES, step=1, readout=False,
                                         layout=ui.Layout(width='100%', margin='0', padding='10px'))
@@ -301,7 +298,7 @@ class UI(ui.VBox):
         self.queue.put_nowait('stop')
 
         super().__init__([
-            ui.HBox([self.start_button, self.stop_button, self.freq_label]),
+            ui.HBox([self.button, self.freq_label]),
             self.freq_slider,
             self.freq_scala,
             self.fig.canvas
@@ -329,21 +326,23 @@ class UI(ui.VBox):
         # noinspection PyTypeChecker
         return self.base_freq * self.HALFTONE ** self.freq_slider.value
 
-    def start(self, _):
-        while not self.queue.empty():
-            self.queue.get_nowait()
-        threading.Thread(target=self.run).start()
-        self.player.start()
+    def switch(self, _):
+        if self.queue.empty():
+            self.queue.put_nowait('stop')
+            self.player.stop()
+            self.button.icon = 'fa-play'
+        else:
+            while not self.queue.empty():
+                self.queue.get_nowait()
+            threading.Thread(target=self.run).start()
+            self.player.start()
+            self.button.icon = 'fa-pause'
 
     def run(self):
         while self.queue.empty():
             self.plot()
             time.sleep(0.01)
             self.offset += 1 / self.base_freq / 20
-
-    def stop(self, _):
-        self.queue.put_nowait('stop')
-        self.player.stop()
 
 
 def _test_vary_freq():
