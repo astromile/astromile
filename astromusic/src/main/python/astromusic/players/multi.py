@@ -11,18 +11,26 @@ class SingleToneUI(ui.HBox):
     TONES = 36
     TONE = ['A', 'A#', 'H', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#']
 
-    def __init__(self, wave_id, wave, base_freq=220, freq_observer=None, switch_observer=None):
+    def __init__(self, wave_id, wave, base_freq=220,
+                 freq_observer=None, phase_observer=None, ampl_observer=None, switch_observer=None):
         self.wave_id = wave_id
         self.wave = wave
         self.base_freq = base_freq
         self.freq_observer = freq_observer
+        self.phase_observer = phase_observer
+        self.ampl_observer = ampl_observer
         self.switch_observer = switch_observer
 
-        self.play_checkbox = ui.Checkbox(description=f'({self.wave_id + 1})', value=False,
-                                         indent=False, layout=ui.Layout(width='5%'))
-        self.play_checkbox.observe(self.on_play_checkbox, names='value')
+        self.freq_label = ui.Label(value=f'({self.wave_id + 1}) {self.wave.freq} Hz', layout=ui.Layout(width='12%'))
 
-        self.freq_label = ui.Label(value=f'{self.wave.freq} Hz', layout=ui.Layout(width='7%'))
+        self.ampl_slider = ui.FloatSlider(description='Amplitude', value=self.wave.amplitude, min=0, max=1,
+                                          layout=ui.Layout(wcwidth='50%', margin='0px'))
+        self.ampl_slider.observe(self.on_ampl_change, names='value')
+
+        self.phase_slider = ui.FloatSlider(description='Phase', value=(self.wave.phase / (2 * np.pi)) % 1.0,
+                                           min=0, max=1, step=0.01,
+                                           layout=ui.Layout(wcwidth='50%', margin='0px'))
+        self.phase_slider.observe(self.on_phase_change, names='value')
 
         self.freq_slider = ui.IntSlider(value=12, min=0, max=self.TONES, step=1,
                                         layout=ui.Layout(width='100%', margin='0px'))
@@ -32,25 +40,38 @@ class SingleToneUI(ui.HBox):
         self.freq_scala = ui.HBox([ui.Label(value=self.TONE[i % 12], layout=layout) for i in range(self.TONES + 1)])
 
         super().__init__([
-            self.play_checkbox,
             self.freq_label,
-            ui.VBox([self.freq_slider, self.freq_scala],
+            ui.VBox([ui.HBox([self.ampl_slider, self.phase_slider]),
+                     self.freq_slider,
+                     self.freq_scala],
                     layout=ui.Layout(width='88%'))
         ])
 
     def is_on(self):
-        return self.play_checkbox.value
+        return self.ampl_slider.value > 0
 
     def switch(self, on):
-        self.play_checkbox.value = on
+        self.ampl_slider.value = 1.0 if on else 0.0
 
     def on_play_checkbox(self, e):
-        # if e.new:
-        #     self.player.start()
-        # else:
-        #     self.player.stop(blocking=False)
         if self.switch_observer is not None:
             self.switch_observer(self.wave_id, e.new)
+
+    def on_ampl_change(self, e):
+        ampl = 0.0 if e.new == 0.0 else 1 / 2 ** (10 * (1 - e.new))
+        self.wave.set_amplitude(ampl)
+        if self.ampl_observer is not None:
+            self.ampl_observer(self.wave_id, ampl)
+        if ampl == 0.0 and self.switch_observer is not None:
+            self.switch_observer(self.wave_id, False)
+        elif e.old == 0.0 and ampl > 0 and self.switch_observer:
+            self.switch_observer(self.wave_id, True)
+
+    def on_phase_change(self, e):
+        phase = 2 * np.pi * e.new
+        self.wave.set_phase(phase)
+        if self.phase_observer is not None:
+            self.phase_observer(self.wave_id, phase)
 
     def set_freq(self, e):
         freq = self.base_freq * self.HALFTONE ** e.new
@@ -107,7 +128,7 @@ class UI(ui.VBox):
             freq = widget.wave.freq
             style = '-' if widget.is_on() else '--'
             self.ax.plot(t, np.sin(2 * np.pi * freq * t), style,
-                         label=f'{widget.play_checkbox.description} : {round(100 * freq) / 100} Hz')
+                         label=f'({widget.wave_id + 1}) : {round(100 * freq) / 100} Hz')
         self.ax.legend(loc='upper left')
         self.ax.set_xlim(0, 4 / 220)
         self.ax.grid()
@@ -135,7 +156,11 @@ class MergedWaveUI(ui.VBox):
         self.waves = []
         for i in range(tone_count):
             wave = VariableWave(freq=freq, amplitude=0.0)
-            widget = SingleToneUI(i, wave, freq_observer=self.on_freq_change, switch_observer=self.on_player_switch)
+            widget = SingleToneUI(i, wave,
+                                  freq_observer=self.on_freq_change,
+                                  phase_observer=self.on_phase_change,
+                                  ampl_observer=self.on_ampl_change,
+                                  switch_observer=self.on_player_switch)
             self.waves.append(wave)
             self.tones.append(widget)
 
@@ -165,8 +190,14 @@ class MergedWaveUI(ui.VBox):
     def on_freq_change(self, wave_id, freq):
         self.plot()
 
+    def on_phase_change(self, wave_id, phase):
+        self.plot()
+
+    def on_ampl_change(self, wave_id, ampl):
+        self.plot()
+
     def on_player_switch(self, wave_id, on):
-        self.waves[wave_id].set_amplitude(float(on))
+        # self.waves[wave_id].set_amplitude(float(on))
         self.plot()
 
     def plot(self):
@@ -181,7 +212,7 @@ class MergedWaveUI(ui.VBox):
             wave.phase = widget.wave.phase
             style = '-' if widget.is_on() else '--'
             ax.plot(t, wave.wave(t), style,
-                    label=f'{widget.play_checkbox.description} : {round(100 * widget.wave.freq) / 100} Hz')
+                    label=f'({widget.wave_id + 1}) : {round(100 * widget.wave.freq) / 100} Hz')
 
             wave.amplitude = widget.wave.amplitude
         ax.legend(loc='upper left')
