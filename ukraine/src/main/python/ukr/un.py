@@ -44,7 +44,7 @@ class UNHR:
             ], axis=0)
 
         if store:
-            self.data.astype('Int64').to_csv(os.path.join(self.root, f'un-{datetime.date.today()}.csv'))
+            self.data.to_csv(os.path.join(self.root, f'un-{datetime.date.today()}.csv'))
 
         return self.data
 
@@ -153,7 +153,7 @@ class UNHR:
         df = pd.DataFrame() if len(data) == 0 else pd.concat(data, axis=1)
         if len(missing) > 0:
             df = pd.concat([df, pd.DataFrame(index=missing)], axis=0).sort_index()
-        return df
+        return df.astype('Int64')
 
 
 def ex_extract():
