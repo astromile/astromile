@@ -76,7 +76,7 @@ class UNHR:
         :param d: Date.
         :return: URL for a given date.
         """
-        return d.strftime('https://www.ohchr.org/en/news/%Y/%m/ukraine-civilian-casualty-update-%#d-%B-%Y')
+        return d.strftime('https://www.ohchr.org/en/news/%Y/%m/ukraine-civilian-casualty-update-%#d-%B-%Y').lower()
 
     @staticmethod
     def s2n(s):
@@ -92,9 +92,12 @@ class UNHR:
         }
         if not silent:
             print('getting content from', url)
-        r = requests.get(url, headers=headers)
-        s = r.content.decode()
         data = {}
+        r = requests.get(url, headers=headers)
+        if r.url != url:  ## => page redirected => ignore
+            return data
+
+        s = r.content.decode()
 
         end = 0
         for _ in range(2):
