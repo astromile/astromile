@@ -94,52 +94,69 @@ app.layout = html.Div([
      Input('save-button', 'n_clicks'),
      ]
 )
-def update_graph(plot_type, view_type, save_disabled, fig0, *_):
+def update(plot_type, view_type, save_disabled, fig0, *_):
+    if ctx.triggered_id == 'save-button':
+        unhr.store()
+        return fig0, last_date(), True
+
     if ctx.triggered_id == 'update-button':
-        timestamp_label.children = 'updating...'
         d = last_date()
         unhr.update(store=False)
         save_button_disabled = (d == last_date()) and save_disabled
-    elif ctx.triggered_id == 'save-button':
-        unhr.store()
-        return fig0, last_date(), True
     else:
         save_button_disabled = save_disabled
 
+    fig = create_graph(PlotType[plot_type],  ## plot_type is labeled by name
+                       ViewType(view_type))  ## view_type is labeled by value
+
+    return fig, last_date(), save_button_disabled
+
+
+def create_graph(plot_type, view_type):
     df = unhr.data
-    plot_type = PlotType[plot_type]  ## plot_type is labeled by name
-    view_type = ViewType(view_type)  ## view_type is labeled by value
 
     if ViewType.is_daily(view_type):
         df = df.loc[:df.last_valid_index()].astype(float).interpolate().diff()
         if view_type == ViewType.MA7d:
             df = df.rolling('7D').mean()
+
     df = df.dropna().stack(level=0).reset_index().rename(columns={'level_0': 'date', 'level_1': 'kind'})
+
     dk = ['date', 'kind']
     cols_geo = ['DL', 'U', 'LDNR']
     cols_gender = {'m': ['men', 'boys'], 'f': ['women', 'girls'], 'u': ['adults', 'children']}
     cols_age = {'adults_total': ['men', 'women', 'adults'], 'children_total': ['boys', 'girls', 'children']}
+
     if plot_type == PlotType.Total:
+
         total = unhr.data.T.xs('total', level=1).T
         total = total.loc[total.last_valid_index()]
         fig = px.line(df, x='date', y='total', color='kind',
                       title=f'Total {total.killed:,} killed and {total.injured:,} injured')
+
     elif plot_type == PlotType.Geo:
+
         ddf = df[dk + cols_geo]
         fig = px.line(ddf, x='date', y=cols_geo, facet_col='kind')
+
     elif plot_type == PlotType.Gender:
+
         ddf = df[dk + [ai for a in list(cols_gender.values()) for ai in a]].copy()
         for g, c in cols_gender.items():
             ddf[g] = ddf[c].sum(axis=1)
         ddf = ddf[dk + list(cols_gender)]
         fig = px.line(ddf, x='date', y=cols_gender, facet_col='kind')
+
     elif plot_type == PlotType.Age:
+
         ddf = df[dk + [ai for a in list(cols_age.values()) for ai in a]].copy()
         for g, c in cols_age.items():
             ddf[g] = ddf[c].sum(axis=1)
         ddf = ddf[dk + list(cols_age)]
         fig = px.line(ddf, x='date', y=cols_age, facet_col='kind')
+
     elif plot_type == PlotType.Gender_Age:
+
         ddf = df[dk + [ai for a in list(cols_gender.values()) for ai in a]]
         ddf = ddf.set_index(['date', 'kind']).stack().reset_index().rename(columns={'level_2': 'type', 0: 'value'})
         ddf['gender'] = None
@@ -149,17 +166,21 @@ def update_graph(plot_type, view_type, save_disabled, fig0, *_):
         for g, c in cols_age.items():
             ddf.loc[ddf['type'].isin(c), 'age'] = g.split('_')[0]
         fig = px.line(ddf, x='date', y='value', facet_col='kind', facet_row='age', color='gender')
+
     elif plot_type == PlotType.Age_Gender:
+
         ddf = df[dk + [ai for a in list(cols_gender.values()) for ai in a]]
         ddf = ddf.set_index(['date', 'kind']).stack().reset_index().rename(columns={'level_2': 'type', 0: 'value'})
         ddf['gender'] = None
         for g, c in cols_gender.items():
             ddf.loc[ddf['type'].isin(c), 'gender'] = g
         fig = px.line(ddf, x='date', y='value', facet_col='kind', facet_row='gender', color='type')
+
     else:
+
         fig = f'Not implemented for {plot_type}'
 
-    return fig, last_date(), save_button_disabled
+    return fig
 
 
 if __name__ == '__main__':
