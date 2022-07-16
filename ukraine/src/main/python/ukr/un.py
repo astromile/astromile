@@ -44,9 +44,12 @@ class UNHR:
             ], axis=0)
 
         if store:
-            self.data.to_csv(os.path.join(self.root, f'un-{datetime.date.today()}.csv'))
+            self.store()
 
         return self.data
+
+    def store(self):
+        self.data.to_csv(os.path.join(self.root, f'un-{datetime.date.today()}.csv'))
 
     def load_last_file(self):
         files = sorted([f for f in os.listdir(self.root) if f.endswith('.csv')])

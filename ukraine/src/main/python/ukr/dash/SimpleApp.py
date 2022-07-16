@@ -1,7 +1,7 @@
 import enum
 
 import plotly.express as px
-from dash import Dash, html, dcc, Input, Output, ctx
+from dash import Dash, html, dcc, Input, Output, State, ctx
 
 from ukr.un import UNHR
 
@@ -75,22 +75,37 @@ app.layout = html.Div([
 
     html.Div([
         html.Button('Update', id='update-button'),
-        timestamp_label
-    ], style={'width': '49%', 'padding': '0px 20px 20px 20px'})
+        html.Div(dcc.Loading(id='loading', children=html.Div([timestamp_label])),
+                 style={'width': '24%', 'display': 'inline-block'}),
+        html.Button('Save', id='save-button', disabled=True)
+    ], style={'padding': '0px 20px 20px 20px'})
 ])
 
 
 @app.callback(
     [Output(main_graph, 'figure'),
-     Output('timestamp-label', 'children')],
+     Output('timestamp-label', 'children'),
+     Output('save-button', 'disabled')],
     [Input(plot_type_radio, 'value'),
      Input(view_type_radio, 'value'),
-     Input('update-button', 'n_clicks')]
+     State('save-button', 'disabled'),
+     State(main_graph, 'figure'),
+     Input('update-button', 'n_clicks'),
+     Input('save-button', 'n_clicks'),
+     ]
 )
-def update_graph(plot_type, view_type, _):
+def update_graph(plot_type, view_type, save_disabled, fig0, *_):
     if ctx.triggered_id == 'update-button':
         timestamp_label.children = 'updating...'
+        d = last_date()
         unhr.update(store=False)
+        save_button_disabled = (d == last_date()) and save_disabled
+    elif ctx.triggered_id == 'save-button':
+        unhr.store()
+        return fig0, last_date(), True
+    else:
+        save_button_disabled = save_disabled
+
     df = unhr.data
     plot_type = PlotType[plot_type]  ## plot_type is labeled by name
     view_type = ViewType(view_type)  ## view_type is labeled by value
@@ -144,7 +159,7 @@ def update_graph(plot_type, view_type, _):
     else:
         fig = f'Not implemented for {plot_type}'
 
-    return fig, last_date()
+    return fig, last_date(), save_button_disabled
 
 
 if __name__ == '__main__':
