@@ -71,7 +71,8 @@ app.layout = html.Div([
 
     ], style={'padding': '10px 5px'}),
 
-    html.Div([main_graph], style={'width': '98%', 'display': 'inline-block', 'padding': '0 20'}),
+    html.Div([main_graph],
+             style={'width': '98%', 'display': 'inline-block', 'padding': '0 20'}),
 
     html.Div([
         html.Button('Update', id='update-button'),
@@ -127,12 +128,15 @@ def create_graph(plot_type, view_type):
     cols_gender = {'m': ['men', 'boys'], 'f': ['women', 'girls'], 'u': ['adults', 'children']}
     cols_age = {'adults_total': ['men', 'women', 'adults'], 'children_total': ['boys', 'girls', 'children']}
 
+    view_labels = {ViewType.Cumulative: 'Total',
+                   ViewType.Daily: 'Daily increment',
+                   ViewType.MA7d: '7D average increment'}
+
     if plot_type == PlotType.Total:
 
-        total = unhr.data.T.xs('total', level=1).T
-        total = total.loc[total.last_valid_index()]
-        fig = px.line(df, x='date', y='total', color='kind',
-                      title=f'Total {total.killed:,} killed and {total.injured:,} injured')
+        total = df[df.date == df.date.max()][['kind', 'total']].set_index('kind').total
+        title = f'{view_labels[view_type]}: {round(total.killed):,} killed and {round(total.injured):,} injured'
+        fig = px.line(df, x='date', y='total', color='kind', title=title)
 
     elif plot_type == PlotType.Geo:
 
