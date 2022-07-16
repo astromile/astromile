@@ -123,25 +123,32 @@ def create_graph(plot_type, view_type):
 
     df = df.dropna().stack(level=0).reset_index().rename(columns={'level_0': 'date', 'level_1': 'kind'})
 
+    kinds = ['killed', 'injured']
     dk = ['date', 'kind']
     cols_geo = ['DL', 'U', 'LDNR']
     cols_gender = {'m': ['men', 'boys'], 'f': ['women', 'girls'], 'u': ['adults', 'children']}
     cols_age = {'adults_total': ['men', 'women', 'adults'], 'children_total': ['boys', 'girls', 'children']}
 
-    view_labels = {ViewType.Cumulative: 'Total',
-                   ViewType.Daily: 'Daily increment',
-                   ViewType.MA7d: '7D average increment'}
+    view_labels = {ViewType.Cumulative: '<b>Total</b>',
+                   ViewType.Daily: '<b>Daily increment</b>',
+                   ViewType.MA7d: '<b>7D average increment</b>'}
 
     if plot_type == PlotType.Total:
 
-        total = df[df.date == df.date.max()][['kind', 'total']].set_index('kind').total
-        title = f'{view_labels[view_type]}: {round(total.killed):,} killed and {round(total.injured):,} injured'
+        count = df[df.date == df.date.max()][['kind', 'total']].set_index('kind').total
+        title = f'{view_labels[view_type]}: ' \
+                + ' and '.join([f'{round(count[kind]):,} <i>{kind}</i>' for kind in kinds])
         fig = px.line(df, x='date', y='total', color='kind', title=title)
 
     elif plot_type == PlotType.Geo:
 
         ddf = df[dk + cols_geo]
-        fig = px.line(ddf, x='date', y=cols_geo, facet_col='kind')
+        count = ddf[ddf.date == ddf.date.max()][['kind'] + cols_geo].set_index('kind')
+        title = f'{view_labels[view_type]}: ' \
+                + ' and '.join([' '.join([f'{round(count.loc[kind][c]):,} [<b>{c}</b>]' for c in cols_geo])
+                                + f' <i>{kind}</i>'
+                                for kind in kinds])
+        fig = px.line(ddf, x='date', y=cols_geo, facet_col='kind', title=title)
 
     elif plot_type == PlotType.Gender:
 
@@ -149,7 +156,12 @@ def create_graph(plot_type, view_type):
         for g, c in cols_gender.items():
             ddf[g] = ddf[c].sum(axis=1)
         ddf = ddf[dk + list(cols_gender)]
-        fig = px.line(ddf, x='date', y=cols_gender, facet_col='kind')
+        count = ddf[ddf.date == ddf.date.max()][['kind'] + list(cols_gender)].set_index('kind')
+        title = f'{view_labels[view_type]}: ' \
+                + ' and '.join([' '.join([f'{round(count.loc[kind][c]):,} [<b>{c}</b>]' for c in cols_gender])
+                                + f' <i>{kind}</i>'
+                                for kind in kinds])
+        fig = px.line(ddf, x='date', y=cols_gender, facet_col='kind', title=title)
 
     elif plot_type == PlotType.Age:
 
@@ -157,7 +169,12 @@ def create_graph(plot_type, view_type):
         for g, c in cols_age.items():
             ddf[g] = ddf[c].sum(axis=1)
         ddf = ddf[dk + list(cols_age)]
-        fig = px.line(ddf, x='date', y=cols_age, facet_col='kind')
+        count = ddf[ddf.date == ddf.date.max()][['kind'] + list(cols_age)].set_index('kind')
+        title = f'{view_labels[view_type]}: ' \
+                + ' and '.join([' '.join([f'{round(count.loc[kind, c]):,} [<b>{c}</b>]' for c in cols_age])
+                                + f' <i>{kind}</i>'
+                                for kind in kinds])
+        fig = px.line(ddf, x='date', y=cols_age, facet_col='kind', title=title)
 
     elif plot_type == PlotType.Gender_Age:
 
