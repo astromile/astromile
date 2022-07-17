@@ -32,14 +32,19 @@ class UNHR:
         last_date = self.data.last_valid_index()
         return last_date, self.data.loc[last_date]
 
-    def update(self, silent=True, store=True):
+    def update(self, silent=True, store=True, ndays=30):
+        today = pd.to_datetime(datetime.date.today())
         if len(self.data) == 0:
-            self.data = self.extract_all(silent=silent)
+            self.data = self.extract_all(
+                dend=pd.to_datetime('2022-03-07') + pd.Timedelta(days=ndays), 
+                silent=silent
+            )
         else:
             self.data = pd.concat([
                 self.data.loc[:self.data.last_valid_index()],
                 self.extract_all(
-                    dstart=self.data.last_valid_index() + pd.Timedelta(days=1)
+                    dstart=self.data.last_valid_index() + pd.Timedelta(days=1),
+                    dend=min(today, self.data.last_valid_index() + pd.Timedelta(days=ndays))
                 )
             ], axis=0)
 
@@ -132,10 +137,11 @@ class UNHR:
 
     @classmethod
     def extract_all(cls, dstart=datetime.date(2022, 3, 7),
+                    dend=pd.to_datetime(datetime.date.today()),
                     silent=False):
         one_day = pd.Timedelta(days=1)
         d = pd.to_datetime(dstart)
-        today = pd.to_datetime(datetime.date.today())
+        today = dend
         data = {}
         missing = []
         while d <= today:

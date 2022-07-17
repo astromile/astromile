@@ -26,10 +26,12 @@ class ViewType(enum.Enum):
 
 
 def last_date():
-    return f'Last update: {unhr.data.last_valid_index().strftime("%d-%B-%Y")}'
+    return f'Last update: {"" if len(unhr.data) == 0 else unhr.data.last_valid_index().strftime("%d-%B-%Y")}'
 
 
 app = Dash(__name__)
+
+server = app.server
 
 unhr = UNHR()
 
@@ -37,14 +39,14 @@ plot_type_radio = dcc.RadioItems(
     [t.name for t in PlotType],
     PlotType.Total.name,
     id='plot-type',
-    labelStyle={'display': 'inline-block', 'marginTop': '5px', 'color': '#ffd700'}
+    labelStyle={'display': 'inline-block', 'marginTop': '5px', 'color': '#ffcc00'}
 )
 
 view_type_radio = dcc.RadioItems(
     [t.value for t in ViewType],
     ViewType.Cumulative.value,
     id='view-type',
-    labelStyle={'display': 'inline-block', 'marginTop': '5px', 'color': '#0057b7'}
+    labelStyle={'display': 'inline-block', 'marginTop': '5px', 'color': '#0066cc'}
 )
 
 main_graph = dcc.Graph(
@@ -61,13 +63,14 @@ timestamp_label = html.Label(
 )
 
 app.layout = html.Div([
+    html.H1("UNHR Ukraine Dashboard"),
     html.Div([
 
         html.Div([plot_type_radio],
-                 style={'width': '49%', 'display': 'inline-block', 'backgroundColor': '#0057b7'}),
+                 style={'width': '49%', 'display': 'inline-block', 'backgroundColor': '#0066cc'}),
 
         html.Div([view_type_radio],
-                 style={'width': '49%', 'float': 'right', 'display': 'inline-block', 'backgroundColor': '#ffd700'})
+                 style={'width': '49%', 'float': 'right', 'display': 'inline-block', 'backgroundColor': '#ffcc00'})
 
     ], style={'padding': '10px 5px'}),
 
