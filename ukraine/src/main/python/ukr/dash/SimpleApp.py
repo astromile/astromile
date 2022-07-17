@@ -116,6 +116,9 @@ def update(plot_type, view_type, save_disabled, fig0, *_):
 def create_graph(plot_type, view_type):
     df = unhr.data
 
+    if len(df) == 0:
+        return px.line()
+
     if ViewType.is_daily(view_type):
         df = df.loc[:df.last_valid_index()].astype(float).interpolate().diff()
         if view_type == ViewType.MA7d:
