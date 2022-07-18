@@ -36,7 +36,7 @@ class UNHR:
         today = pd.to_datetime(datetime.date.today())
         if len(self.data) == 0:
             self.data = self.extract_all(
-                dend=pd.to_datetime('2022-03-07') + pd.Timedelta(days=ndays), 
+                dend=pd.to_datetime('2022-03-07') + pd.Timedelta(days=ndays),
                 silent=silent
             )
         else:
@@ -84,7 +84,9 @@ class UNHR:
         :param d: Date.
         :return: URL for a given date.
         """
-        return d.strftime('https://www.ohchr.org/en/news/%Y/%m/ukraine-civilian-casualty-update-%#d-%B-%Y').lower()
+        fmt = 'https://www.ohchr.org/en/news/%Y/%m/ukraine-civilian-casualty-update-' \
+              + f'%{"-" if os.name == "posix" else "#"}d-%B-%Y'
+        return d.strftime(fmt).lower()
 
     @staticmethod
     def s2n(s):
