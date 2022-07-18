@@ -76,23 +76,18 @@ timestamp_label = html.Label(
 
 
 def output_table(kind='killed'):
-    df = unhr.data[kind].dropna().reset_index().rename(columns={'index': 'date'})
+    df = unhr.data[kind].dropna().sort_index(ascending=False).reset_index().rename(columns={'index': 'date'})
     links = []
     for d in df.date:
         url = UNHR.url_at(d)
-        links.append(f'[{url}]({url})')
-    df['date'] = df.date.dt.strftime('%d %b %Y')
-    df['source'] = links
-    columns = []
-    for c in df.columns:
-        cc = {'name': c, 'id': c}
-        if c == 'source':
-            cc |= {'presentation': 'markdown'}
-        else:
-            cc |= {'style': {'width': '5%'}}
-        columns.append(cc)
+        parts = url.split('/')
+        ukr_date = parts[-1].split('-')
+        text = '.'.join(parts[2].split('.')[1:]) + '/.../' + ukr_date[0] + '-...-' + '-'.join(ukr_date[-3:])
+        links.append(f'[{text}]({url})')
+    df['date'] = links
+    df.rename(columns={'date': 'source'}, inplace=True)
     return {'data': df.to_dict('records'),
-            'columns': [{'name': c, 'id': c, 'presentation': 'markdown'} if c == 'source' else {'name': c, 'id': c}
+            'columns': [{'name': c, 'id': c} | ({'presentation': 'markdown'} if c == 'source' else {})
                         for c in df.columns]}
 
 
