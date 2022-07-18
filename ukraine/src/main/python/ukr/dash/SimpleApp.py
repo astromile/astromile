@@ -34,7 +34,10 @@ def last_date():
     return f'Last update: {"" if len(unhr.data) == 0 else unhr.data.last_valid_index().strftime("%d-%B-%Y")}'
 
 
-app = Dash(__name__, external_stylesheets=['https://codepen.io/chriddyp/pen/bWLwgP.css'])
+app = Dash(__name__, external_stylesheets=[
+    'https://codepen.io/chriddyp/pen/bWLwgP.css',
+    'https://use.fontawesome.com/releases/v6.1.1/css/all.css'
+])
 
 server = app.server
 
@@ -113,26 +116,33 @@ app.layout = html.Div([
 
             ]),
             dcc.Tab(label='Table', children=[
+
                 html.Div([kind_radio],
                          style={'width': '25%', 'display': 'inline-block', 'backgroundColor': '#0066cc'}),
+
                 html.Div([
-                    html.Button('Export CSV', id='export-button'),
+                    html.Button('Export CSV', id='export-button', className='button-primary'),
                     dcc.Download(id='export-csv')
                 ], style={'width': '25%', 'display': 'inline-block', 'margin': '10px 10px 10px 10px'}),
+
                 dash_table.DataTable(
                     id='data-table',
                     style_cell={'width': '3%'},
                     **output_table()
                 ),
+
             ])
         ]
     ),
 
     html.Div([
-        html.Button('Update', id='update-button'),
+        html.Button(html.I(className='fa-regular fa-floppy-disk fa-2xl'),
+                    id='save-button', className='strom-button-disabled', disabled=True,
+                    ),
+        html.Button(html.I(className='fa fa-rotate fa-2xl'),
+                    id='update-button', className='button-primary'),
         html.Div(dcc.Loading(id='loading', children=html.Div([timestamp_label])),
-                 style={'width': '24%', 'display': 'inline-block'}),
-        html.Button('Save', id='save-button', disabled=True)
+                 style={'display': 'inline-block'}),
     ], style={'padding': '20px 20px 20px 20px'})
 ])
 
@@ -141,12 +151,14 @@ app.layout = html.Div([
     [Output(main_graph, 'figure'),
      Output('timestamp-label', 'children'),
      Output('save-button', 'disabled'),
+     Output('save-button', 'className'),
      Output('data-table', 'data'),
      Output('data-table', 'columns')],
     [Input(plot_type_radio, 'value'),
      Input(view_type_radio, 'value'),
      Input(kind_radio, 'value'),
      State('save-button', 'disabled'),
+     State('save-button', 'className'),
      State(main_graph, 'figure'),
      State('data-table', 'data'),
      State('data-table', 'columns'),
@@ -154,18 +166,19 @@ app.layout = html.Div([
      Input('save-button', 'n_clicks'),
      ]
 )
-def update(plot_type, view_type, kind_type, save_disabled, fig0, data, columns, *_):
+def update(plot_type, view_type, kind_type, save_disabled, save_class, fig0, data, columns, *_):
     if ctx.triggered_id == 'save-button':
         unhr.store()
-        return fig0, last_date(), True, data, columns
+        return fig0, last_date(), True, 'strom-button-disabled', data, columns
     elif ctx.triggered_id == 'kind':
         table = output_table(kind_type)
-        return fig0, last_date(), save_disabled, table['data'], table['columns']
+        return fig0, last_date(), save_disabled, save_class, table['data'], table['columns']
 
     if ctx.triggered_id == 'update-button':
         d = last_date()
         unhr.update(store=False)
         save_button_disabled = (d == last_date()) and save_disabled
+        save_class = 'strom-button-disabled' if save_button_disabled else 'button-primary'
         table = output_table(kind_type)
         data = table['data']
         columns = table['columns']
@@ -175,7 +188,7 @@ def update(plot_type, view_type, kind_type, save_disabled, fig0, data, columns, 
     fig = create_graph(PlotType[plot_type],  ## plot_type is labeled by name
                        ViewType(view_type))  ## view_type is labeled by value
 
-    return fig, last_date(), save_button_disabled, data, columns
+    return fig, last_date(), save_button_disabled, save_class, data, columns
 
 
 def create_graph(plot_type, view_type):
