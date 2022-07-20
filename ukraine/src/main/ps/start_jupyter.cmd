@@ -1,2 +1,2 @@
-call conda activate dash
+call conda activate dash39
 call jupyter notebook --notebook-dir=../python

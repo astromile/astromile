@@ -1,8 +1,10 @@
 import enum
 
+import pandas as pd
 import plotly.express as px
 from dash import Dash, html, dcc, Input, Output, State, ctx, dash_table
 
+from ukr.data import DB
 from ukr.un import UNHR
 
 
@@ -41,7 +43,7 @@ app = Dash(__name__, external_stylesheets=[
 
 server = app.server
 
-unhr = UNHR()
+unhr = UNHR(data_bean=DB())
 
 plot_type_radio = dcc.RadioItems(
     [t.name for t in PlotType],
@@ -99,7 +101,7 @@ app.layout = html.Div([
 
     dcc.Tabs(
         [
-            dcc.Tab(label='Plots', children=[
+            dcc.Tab(label='Daily Reports Visualized', children=[
                 html.Div([
 
                     html.Div([plot_type_radio],
@@ -115,7 +117,7 @@ app.layout = html.Div([
                          style={'width': '98%', 'display': 'inline-block', 'padding': '0 20'}),
 
             ]),
-            dcc.Tab(label='Table', children=[
+            dcc.Tab(label='Daily Reports Table', children=[
 
                 html.Div([kind_radio],
                          style={'width': '25%', 'display': 'inline-block', 'backgroundColor': '#0066cc'}),
@@ -130,6 +132,17 @@ app.layout = html.Div([
                     style_cell={'width': '3%'},
                     **output_table()
                 ),
+
+            ]),
+            dcc.Tab(label='By Month', children=[
+                dcc.Dropdown(options=list(unhr.summary.keys()), id='monthly-version'),
+
+                html.Div([dcc.Graph(
+                    id='monthly-plot',
+                    style={'height': '700px'},
+                    config={"displaylogo": False}
+                )],
+                    style={'width': '98%', 'display': 'inline-block', 'padding': '0 20'}),
 
             ])
         ]
@@ -153,7 +166,8 @@ app.layout = html.Div([
      Output('save-button', 'disabled'),
      Output('save-button', 'className'),
      Output('data-table', 'data'),
-     Output('data-table', 'columns')],
+     Output('data-table', 'columns'),
+     Output('monthly-version', 'options')],
     [Input(plot_type_radio, 'value'),
      Input(view_type_radio, 'value'),
      Input(kind_radio, 'value'),
@@ -169,10 +183,11 @@ app.layout = html.Div([
 def update(plot_type, view_type, kind_type, save_disabled, save_class, fig0, data, columns, *_):
     if ctx.triggered_id == 'save-button':
         unhr.store()
-        return fig0, last_date(), True, 'strom-button-disabled', data, columns
+        return fig0, last_date(), True, 'strom-button-disabled', data, columns, sorted(unhr.summary.keys())[::-1]
     elif ctx.triggered_id == 'kind':
         table = output_table(kind_type)
-        return fig0, last_date(), save_disabled, save_class, table['data'], table['columns']
+        return fig0, last_date(), save_disabled, save_class, table['data'], table['columns'], \
+               sorted(unhr.summary.keys())[::-1]
 
     if ctx.triggered_id == 'update-button':
         d = last_date()
@@ -188,7 +203,7 @@ def update(plot_type, view_type, kind_type, save_disabled, save_class, fig0, dat
     fig = create_graph(PlotType[plot_type],  ## plot_type is labeled by name
                        ViewType(view_type))  ## view_type is labeled by value
 
-    return fig, last_date(), save_button_disabled, save_class, data, columns
+    return fig, last_date(), save_button_disabled, save_class, data, columns, sorted(unhr.summary.keys())[::-1]
 
 
 def create_graph(plot_type, view_type):
@@ -281,6 +296,25 @@ def create_graph(plot_type, view_type):
     else:
 
         fig = f'Not implemented for {plot_type}'
+
+    return fig
+
+
+@app.callback(
+    Output('monthly-plot', 'figure'),
+    Input('monthly-version', 'value')
+)
+def update_monthly_plot(version):
+    if version:
+        version = pd.to_datetime(version).date()
+
+    if version not in unhr.summary:
+        return px.bar()
+
+    df = unhr.summary[version]
+    df = df[df.Period != 'Total']
+
+    fig = px.bar(df, x='Period', y=['Injured', 'Killed'], barmode='group')
 
     return fig
 
