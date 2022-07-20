@@ -4,6 +4,7 @@ import pandas as pd
 import plotly.express as px
 from dash import Dash, html, dcc, Input, Output, State, ctx, dash_table
 
+from ukr.data import DB
 from ukr.un import UNHR
 from ukr.util import init_logging
 
@@ -45,7 +46,7 @@ server = app.server
 
 init_logging()
 
-unhr = UNHR()  # data_bean=DB())
+unhr = UNHR(data_bean=DB())
 
 plot_type_radio = dcc.RadioItems(
     [t.name for t in PlotType],
