@@ -40,7 +40,10 @@ class UNHR:
                  load=True):
         self.data_bean = data_bean
         self.root = default_root()
-        self.summary = self.data_bean.get_monthly() if load else {}
+        self.summary = {
+            pd.to_datetime(d).date(): g.drop('date', axis=1)
+            for d, g in self.data_bean.get_monthly().rename(columns={'month': 'Period'}).groupby('date')
+        } if load else {}
         self.data = self.data_bean.get_reports() if load else pd.DataFrame()
         self.cm = {}
 

@@ -56,8 +56,7 @@ class FileDataBean(DataBean):
                 os.path.join(self.root, files[-1])
             )
             logging.info(f'successfully loaded {len(df.date.unique())} monthly tables')
-            return {pd.to_datetime(d): g.drop('date', axis=1).rename(columns={'month': 'Period'})
-                    for d, g in df.groupby('date')}
+            return df
 
     def add_new_monthly(self, monthly):
         logging.info(f'Saving {len(monthly)} monthly records')
@@ -141,6 +140,7 @@ class DB(DataBean):
     def add_new_monthly(self, monthly):
         db_dates = self.get_report_dates()
         db_monthly = self.get_monthly(db_dates=db_dates)
+        monthly['date'] = pd.to_datetime(monthly.date)
         monthly = monthly[~monthly.date.isin(db_monthly.date.unique())].copy()  ## filter new entries
         db_dates = db_dates[db_dates.isin(monthly.date.unique())].to_frame().reset_index().set_index('date')['id']
         monthly['report_id'] = db_dates.loc[monthly.date].values

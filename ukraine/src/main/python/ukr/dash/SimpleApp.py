@@ -4,8 +4,8 @@ import pandas as pd
 import plotly.express as px
 from dash import Dash, html, dcc, Input, Output, State, ctx, dash_table
 
-from ukr.data import DB
 from ukr.un import UNHR
+from ukr.util import init_logging
 
 
 class PlotType(enum.Enum):
@@ -43,7 +43,9 @@ app = Dash(__name__, external_stylesheets=[
 
 server = app.server
 
-unhr = UNHR(data_bean=DB())
+init_logging()
+
+unhr = UNHR()  # data_bean=DB())
 
 plot_type_radio = dcc.RadioItems(
     [t.name for t in PlotType],
@@ -135,7 +137,9 @@ app.layout = html.Div([
 
             ]),
             dcc.Tab(label='By Month', children=[
-                dcc.Dropdown(options=list(unhr.summary.keys()), id='monthly-version'),
+                dcc.Dropdown(options=sorted(unhr.summary.keys())[::-1],
+                             value=None if len(unhr.summary) == 0 else max(unhr.summary.keys()),
+                             id='monthly-version'),
 
                 html.Div([dcc.Graph(
                     id='monthly-plot',
@@ -312,7 +316,8 @@ def update_monthly_plot(version):
         return px.bar()
 
     df = unhr.summary[version]
-    df = df[df.Period != 'Total']
+    df = df[df.Period != 'Total'].copy()
+    df.columns = [c[:1].upper() + c[1:] for c in df.columns]  ## capitalize column names
 
     fig = px.bar(df, x='Period', y=['Injured', 'Killed'], barmode='group')
 
