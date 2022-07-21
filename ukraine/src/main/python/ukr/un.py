@@ -1,4 +1,5 @@
 import datetime
+import logging
 import re
 from typing import Union
 
@@ -52,6 +53,7 @@ class UNHR:
         return last_date, self.data.loc[last_date]
 
     def update(self, silent=True, store=True, ndays=30):
+        # noinspection PyTypeChecker
         today = pd.to_datetime(datetime.date.today())
         if len(self.data) == 0:
             self.data, self.summary, self.cm = self.extract_all(
@@ -114,6 +116,7 @@ class UNHR:
             df = pd.read_html(s, match='24-28 February', header=0)[0]
             return df.rename(columns={df.columns[0]: 'Period'})
         except ValueError as e:
+            logging.debug(f'cannot extract monthly summary: {e}')
             return None
 
     @classmethod
@@ -208,6 +211,7 @@ class UNHR:
 
         return data
 
+    # noinspection PyTypeChecker
     @classmethod
     def extract_all(cls, dstart=datetime.date(2022, 3, 7),
                     dend=pd.to_datetime(datetime.date.today()),
@@ -219,11 +223,12 @@ class UNHR:
         summary = {}
         cm = {}
         missing = []
+        k = None
         while d <= today:
             dd, dsum, dcm = cls.extract(d)
 
             if len(dd) == 0:
-                if 'k' in locals():
+                if k is not None:
                     data.setdefault(k, pd.DataFrame()).at[d, :] = None
                 else:
                     missing.append(d)
@@ -234,10 +239,10 @@ class UNHR:
                     ] = v.values()
 
             if dsum is not None:
-                summary[d] = dsum
+                summary[d.date()] = dsum
 
             if dcm:
-                cm[d] = dcm
+                cm[d.date()] = dcm
 
             if not silent:
                 print(d, 'processed')

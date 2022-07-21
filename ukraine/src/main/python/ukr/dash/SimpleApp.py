@@ -191,8 +191,8 @@ def update(plot_type, view_type, kind_type, save_disabled, save_class, fig0, dat
         return fig0, last_date(), True, 'strom-button-disabled', data, columns, sorted(unhr.summary.keys())[::-1]
     elif ctx.triggered_id == 'kind':
         table = output_table(kind_type)
-        return fig0, last_date(), save_disabled, save_class, table['data'], table['columns'], \
-               sorted(unhr.summary.keys())[::-1]
+        return (fig0, last_date(), save_disabled, save_class, table['data'], table['columns'],
+                sorted(unhr.summary.keys())[::-1])
 
     if ctx.triggered_id == 'update-button':
         d = last_date()
