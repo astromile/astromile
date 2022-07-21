@@ -86,16 +86,19 @@ class UNHR:
 
     @property
     def monthly(self):
-        return pd.concat(
-            {d: s[s.Period != 'Total'].set_index('Period')
-             for d, s in self.summary.items()},
-            axis=1
-        ).astype('Int64').stack(level=0).reset_index().rename(columns={
-            'Period': 'month',
-            'level_1': 'date'
-        }).sort_values(
-            'date'
-        )
+        if len(self.summary) == 0:
+            return pd.DataFrame()
+        else:
+            return pd.concat(
+                {d: s[s.Period != 'Total'].set_index('Period')
+                 for d, s in self.summary.items()},
+                axis=1
+            ).astype('Int64').stack(level=0).reset_index().rename(columns={
+                'Period': 'month',
+                'level_1': 'date'
+            }).sort_values(
+                'date'
+            )
 
     @staticmethod
     def url_at(d: Union[datetime.date, pd.Timestamp]):

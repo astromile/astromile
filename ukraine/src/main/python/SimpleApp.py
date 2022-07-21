@@ -3,8 +3,9 @@ import enum
 import plotly.express as px
 from dash import Dash, html, dcc, Input, Output, State, ctx, dash_table
 
+from ukr.data import DB
 from ukr.un import UNHR
-from ukr.util import init_logging
+from ukr.util import init_logging, i_am_on_server
 
 
 class PlotType(enum.Enum):
@@ -44,7 +45,7 @@ server = app.server
 
 init_logging()
 
-unhr = UNHR(data_bean=DB())
+unhr = UNHR(data_bean=DB()) if i_am_on_server() else UNHR()
 
 plot_type_radio = dcc.RadioItems(
     [t.name for t in PlotType],
