@@ -49,7 +49,7 @@ class FileDataBean(DataBean):
                         if f.startswith('monthly-') and f.endswith('.csv')])
         if len(files) == 0:
             logging.info(f'No monthly files found in {self.root}')
-            return {}
+            return pd.DataFrame()
         else:
             logging.info(f'Loading monthly data from {self.root}/{files[-1]}')
             df = pd.read_csv(

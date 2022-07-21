@@ -4,3 +4,7 @@ button.strom-button-disabled{
     color: #666667;
     cursor: default;
 }
+
+span.rc-slider-mark-text{
+    width: 70px;
+}

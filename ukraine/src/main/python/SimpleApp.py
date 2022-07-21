@@ -1,10 +1,8 @@
 import enum
 
-import pandas as pd
 import plotly.express as px
 from dash import Dash, html, dcc, Input, Output, State, ctx, dash_table
 
-from ukr.data import DB
 from ukr.un import UNHR
 from ukr.util import init_logging
 
@@ -138,18 +136,20 @@ app.layout = html.Div([
 
             ]),
             dcc.Tab(label='By Month', children=[
-                dcc.Dropdown(options=sorted(unhr.summary.keys())[::-1],
-                             value=None if len(unhr.summary) == 0 else max(unhr.summary.keys()),
-                             id='monthly-version'),
+                html.Div([
+                    dcc.Slider(min=0, max=len(unhr.summary) - 1, step=1, value=len(unhr.summary) - 1,
+                               marks={i: str(d) for i, d in enumerate(sorted(unhr.summary.keys()))},
+                               id='monthly-version', vertical=True)
+                ], style={'minWidth': '83px', 'width': '15%', 'display': 'inline-block', 'verticalAlign': 'middle'}),
 
                 html.Div([dcc.Graph(
                     id='monthly-plot',
                     style={'height': '700px'},
                     config={"displaylogo": False}
                 )],
-                    style={'width': '98%', 'display': 'inline-block', 'padding': '0 20'}),
+                    style={'width': '83%', 'display': 'inline-block', 'padding': '0 20', 'verticalAlign': 'middle'}),
 
-            ])
+            ], id='month-tab', disabled=len(unhr.summary) == 0)
         ]
     ),
 
@@ -172,7 +172,10 @@ app.layout = html.Div([
      Output('save-button', 'className'),
      Output('data-table', 'data'),
      Output('data-table', 'columns'),
-     Output('monthly-version', 'options')],
+     Output('monthly-version', 'max'),
+     Output('monthly-version', 'marks'),
+     Output('month-tab', 'disabled'),
+     ],
     [Input(plot_type_radio, 'value'),
      Input(view_type_radio, 'value'),
      Input(kind_radio, 'value'),
@@ -181,18 +184,23 @@ app.layout = html.Div([
      State(main_graph, 'figure'),
      State('data-table', 'data'),
      State('data-table', 'columns'),
+     State('monthly-version', 'max'),
+     State('monthly-version', 'marks'),
+     State('month-tab', 'disabled'),
      Input('update-button', 'n_clicks'),
      Input('save-button', 'n_clicks'),
      ]
 )
-def update(plot_type, view_type, kind_type, save_disabled, save_class, fig0, data, columns, *_):
+def update(plot_type, view_type, kind_type, save_disabled, save_class, fig0, data, columns,
+           monthly_version_max, monthly_version_marks, month_tab_disabled, *_):
     if ctx.triggered_id == 'save-button':
         unhr.store()
-        return fig0, last_date(), True, 'strom-button-disabled', data, columns, sorted(unhr.summary.keys())[::-1]
+        return (fig0, last_date(), True, 'strom-button-disabled', data, columns,
+                monthly_version_max, monthly_version_marks, month_tab_disabled)
     elif ctx.triggered_id == 'kind':
         table = output_table(kind_type)
         return (fig0, last_date(), save_disabled, save_class, table['data'], table['columns'],
-                sorted(unhr.summary.keys())[::-1])
+                monthly_version_max, monthly_version_marks, month_tab_disabled)
 
     if ctx.triggered_id == 'update-button':
         d = last_date()
@@ -202,13 +210,17 @@ def update(plot_type, view_type, kind_type, save_disabled, save_class, fig0, dat
         table = output_table(kind_type)
         data = table['data']
         columns = table['columns']
+        monthly_version_max = len(unhr.summary) - 1
+        monthly_version_marks = {i: str(d) for i, d in enumerate(sorted(unhr.summary.keys()))}
+        month_tab_disabled = len(unhr.summary) == 0
     else:
         save_button_disabled = save_disabled
 
     fig = create_graph(PlotType[plot_type],  ## plot_type is labeled by name
                        ViewType(view_type))  ## view_type is labeled by value
 
-    return fig, last_date(), save_button_disabled, save_class, data, columns, sorted(unhr.summary.keys())[::-1]
+    return (fig, last_date(), save_button_disabled, save_class, data, columns,
+            monthly_version_max, monthly_version_marks, month_tab_disabled)
 
 
 def create_graph(plot_type, view_type):
@@ -310,8 +322,8 @@ def create_graph(plot_type, view_type):
     Input('monthly-version', 'value')
 )
 def update_monthly_plot(version):
-    if version:
-        version = pd.to_datetime(version).date()
+    if version >= 0:
+        version = sorted(unhr.summary.keys())[version]
 
     if version not in unhr.summary:
         return px.bar()

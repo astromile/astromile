@@ -41,11 +41,17 @@ class UNHR:
                  load=True):
         self.data_bean = data_bean
         self.root = default_root()
-        self.summary = {
-            pd.to_datetime(d).date(): g.drop('date', axis=1)
-            for d, g in self.data_bean.get_monthly().rename(columns={'month': 'Period'}).groupby('date')
-        } if load else {}
-        self.data = self.data_bean.get_reports() if load else pd.DataFrame()
+        self.summary = {}
+        if load:
+            monthly = self.data_bean.get_monthly().rename(columns={'month': 'Period'})
+            if len(monthly) > 0:
+                self.summary = {
+                    pd.to_datetime(d).date(): g.drop('date', axis=1)
+                    for d, g in monthly.groupby('date')
+                }
+            self.data = self.data_bean.get_reports()
+        else:
+            self.data = pd.DataFrame()
         self.cm = {}
 
     def last(self):
@@ -245,7 +251,8 @@ class UNHR:
                 cm[d.date()] = dcm
 
             if not silent:
-                print(d, 'processed')
+                print(d, 'processed', '' if len(dd) == 0 else 'data',
+                      '' if dsum is None or len(dsum) == 0 else 'monthly', '' if len(dcm) == 0 else 'cm')
             d += one_day
         df = pd.DataFrame() if len(data) == 0 else pd.concat(data, axis=1)
         if len(missing) > 0:
