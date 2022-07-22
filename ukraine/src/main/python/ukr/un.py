@@ -89,9 +89,13 @@ class UNHR:
         if len(self.summary) == 0:
             return pd.DataFrame()
         else:
+            def cleanup(df):
+                df = df[df.Period != 'Total'].set_index('Period')
+                df.columns = [c.lower() for c in df.columns]
+                return df
+
             return pd.concat(
-                {d: s[s.Period != 'Total'].set_index('Period')
-                 for d, s in self.summary.items()},
+                {d: cleanup(s) for d, s in self.summary.items()},
                 axis=1
             ).astype('Int64').stack(level=0).reset_index().rename(columns={
                 'Period': 'month',

@@ -1,11 +1,15 @@
 import enum
+import json
+import logging
 
+import pandas as pd
 import plotly.express as px
-from dash import Dash, html, dcc, Input, Output, State, ctx, dash_table
+from dash import Dash, html, dcc, Input, Output, State, dash_table, ctx
+from dash.exceptions import PreventUpdate
 
 from ukr.data import DB
 from ukr.un import UNHR
-from ukr.util import init_logging, i_am_on_server
+from ukr.util import init_logging
 
 
 class PlotType(enum.Enum):
@@ -32,10 +36,6 @@ class Kind(enum.Enum):
     Injured = 'injured'
 
 
-def last_date():
-    return f'Last update: {"" if len(unhr.data) == 0 else unhr.data.last_valid_index().strftime("%d-%B-%Y")}'
-
-
 app = Dash(__name__, external_stylesheets=[
     'https://codepen.io/chriddyp/pen/bWLwgP.css',
     'https://use.fontawesome.com/releases/v6.1.1/css/all.css'
@@ -43,9 +43,14 @@ app = Dash(__name__, external_stylesheets=[
 
 server = app.server
 
-init_logging()
+init_logging(level=logging.DEBUG)
 
-unhr = UNHR(data_bean=DB()) if i_am_on_server() else UNHR()
+data_bean = DB()
+
+
+def last_date(data):
+    return f'Last update: {"" if len(data) == 0 else data.last_valid_index().strftime("%d-%B-%Y")}'
+
 
 plot_type_radio = dcc.RadioItems(
     [t.name for t in PlotType],
@@ -75,15 +80,9 @@ main_graph = dcc.Graph(
     # hoverData={'points': [{'customdata': 'Japan'}]}
 )
 
-timestamp_label = html.Label(
-    last_date(),
-    id='timestamp-label',
-    style={'padding': '0px 0px 0px 20px'}
-)
 
-
-def output_table(kind='killed'):
-    df = unhr.data[kind].dropna().sort_index(ascending=False).reset_index().rename(columns={'index': 'date'})
+def output_table(kind, data):
+    df = data[kind].dropna().sort_index(ascending=False).reset_index().rename(columns={'index': 'date'})
     links = []
     for d in df.date:
         url = UNHR.url_at(d)
@@ -98,135 +97,206 @@ def output_table(kind='killed'):
                         for c in df.columns]}
 
 
-app.layout = html.Div([
-    html.H1("UNHR Ukraine Dashboard"),
+def load_data(unhr):
+    reports = unhr.data.copy()
+    reports.columns = [c[0] + '_' + c[1] for c in reports.columns]
+    data = {
+        'reports': reports.to_json(),
+        'monthly': {d.strftime('%Y-%m-%d'): m.to_json() for d, m in unhr.summary.items()}
+    }
+    return json.dumps(data)
 
-    dcc.Tabs(
-        [
-            dcc.Tab(label='Daily Reports Visualized', children=[
-                html.Div([
 
-                    html.Div([plot_type_radio],
-                             style={'width': '49%', 'display': 'inline-block', 'backgroundColor': '#0066cc'}),
+def extract_reports(data):
+    reports = pd.read_json(json.loads(data)['reports'])
+    reports.columns = pd.MultiIndex.from_tuples([c.split('_') for c in reports.columns])
+    return reports
 
-                    html.Div([view_type_radio],
-                             style={'width': '49%', 'float': 'right', 'display': 'inline-block',
-                                    'backgroundColor': '#ffcc00'})
 
-                ], style={'padding': '10px 5px'}),
+def extract_monthly(data):
+    def resort(df):
+        df = df[df.Period != 'Total'].copy()
+        df['by'] = pd.to_datetime('2022-' + df.Period.str.split(' ').apply(lambda x: x[-1]).str[:3] + '-01')
+        return df.sort_values('by').drop(columns='by')
 
-                html.Div([main_graph],
-                         style={'width': '98%', 'display': 'inline-block', 'padding': '0 20'}),
+    return {pd.to_datetime(d).date(): resort(pd.read_json(m))
+            for d, m in json.loads(data)['monthly'].items()}
 
-            ]),
-            dcc.Tab(label='Daily Reports Table', children=[
 
-                html.Div([kind_radio],
-                         style={'width': '25%', 'display': 'inline-block', 'backgroundColor': '#0066cc'}),
+def build_unhr(data):
+    data = json.loads(data)
+    data['reports'] = pd.read_json(data['reports'])
+    data['reports'].columns = pd.MultiIndex.from_tuples([c.split('_') for c in data['reports'].columns])
+    data['monthly'] = {pd.to_datetime(d).date(): pd.read_json(m)
+                       for d, m in data['monthly'].items()}
 
-                html.Div([
-                    html.Button('Export CSV', id='export-button', className='button-primary'),
-                    dcc.Download(id='export-csv')
-                ], style={'width': '25%', 'display': 'inline-block', 'margin': '10px 10px 10px 10px'}),
+    unhr = UNHR(data_bean=data_bean, load=False)
+    unhr.data = data['reports']
+    unhr.summary = data['monthly']
+    return unhr
 
-                dash_table.DataTable(
-                    id='data-table',
-                    style_cell={'width': '3%'},
-                    **output_table()
-                ),
 
-            ]),
-            dcc.Tab(label='By Month', children=[
-                html.Div([
-                    dcc.Slider(min=0, max=len(unhr.summary) - 1, step=1, value=len(unhr.summary) - 1,
-                               marks={i: str(d) for i, d in enumerate(sorted(unhr.summary.keys()))},
-                               id='monthly-version', vertical=True)
-                ], style={'minWidth': '83px', 'width': '15%', 'display': 'inline-block', 'verticalAlign': 'middle'}),
+def serve_layout():
+    logging.debug('reloading page?')
+    unhr = UNHR(data_bean=data_bean)
+    data = load_data(unhr)
 
-                html.Div([dcc.Graph(
-                    id='monthly-plot',
-                    style={'height': '700px'},
-                    config={"displaylogo": False}
-                )],
-                    style={'width': '83%', 'display': 'inline-block', 'padding': '0 20', 'verticalAlign': 'middle'}),
+    return html.Div([
+        html.H1("UNHR Ukraine Dashboard"),
+        dcc.Store(id='store', data=data),
 
-            ], id='month-tab', disabled=len(unhr.summary) == 0)
-        ]
-    ),
+        dcc.Tabs(
+            [
+                dcc.Tab(label='Daily Reports Visualized', children=[
+                    html.Div([
 
-    html.Div([
-        html.Button(html.I(className='fa-regular fa-floppy-disk fa-2xl'),
-                    id='save-button', className='strom-button-disabled', disabled=True,
+                        html.Div([plot_type_radio],
+                                 style={'width': '49%', 'display': 'inline-block', 'backgroundColor': '#0066cc'}),
+
+                        html.Div([view_type_radio],
+                                 style={'width': '49%', 'float': 'right', 'display': 'inline-block',
+                                        'backgroundColor': '#ffcc00'})
+
+                    ], style={'padding': '10px 5px'}),
+
+                    html.Div([main_graph],
+                             style={'width': '98%', 'display': 'inline-block', 'padding': '0 20'}),
+
+                ]),
+                dcc.Tab(label='Daily Reports Table', children=[
+
+                    html.Div([kind_radio],
+                             style={'width': '25%', 'display': 'inline-block', 'backgroundColor': '#0066cc'}),
+
+                    html.Div([
+                        html.Button('Export CSV', id='export-button', className='button-primary'),
+                        dcc.Download(id='export-csv')
+                    ], style={'width': '25%', 'display': 'inline-block', 'margin': '10px 10px 10px 10px'}),
+
+                    dash_table.DataTable(
+                        id='data-table',
+                        style_cell={'width': '3%'},
+                        **output_table(Kind.Killed.value, unhr.data)
                     ),
-        html.Button(html.I(className='fa fa-rotate fa-2xl'),
-                    id='update-button', className='button-primary'),
-        html.Div(dcc.Loading(id='loading', children=html.Div([timestamp_label])),
-                 style={'display': 'inline-block'}),
-    ], style={'padding': '20px 20px 20px 20px'})
-])
+
+                ]),
+                dcc.Tab(label='By Month', children=[
+                    html.Div([
+                        dcc.Slider(min=0, max=len(unhr.summary) - 1, step=1, value=len(unhr.summary) - 1,
+                                   marks={i: str(d) for i, d in enumerate(sorted(unhr.summary.keys()))},
+                                   id='monthly-version', vertical=True)
+                    ], style={'minWidth': '83px', 'width': '15%', 'display': 'inline-block',
+                              'verticalAlign': 'middle'}),
+
+                    html.Div([dcc.Graph(
+                        id='monthly-plot',
+                        style={'height': '700px'},
+                        config={"displaylogo": False}
+                    )],
+                        style={'width': '83%', 'display': 'inline-block', 'padding': '0 20',
+                               'verticalAlign': 'middle'}),
+
+                ], id='month-tab', disabled=len(unhr.summary) == 0)
+            ]
+        ),
+
+        html.Div([
+            html.Button(html.I(className='fa-regular fa-floppy-disk fa-2xl'),
+                        id='save-button', className='strom-button-disabled', disabled=True,
+                        ),
+            html.Button(html.I(className='fa fa-rotate fa-2xl'),
+                        id='update-button', className='button-primary'),
+            html.Div(dcc.Loading(id='loading', children=html.Div([html.Label(
+                last_date(unhr.data),
+                id='timestamp-label',
+                style={'padding': '0px 0px 0px 20px'}
+            )])),
+                     style={'display': 'inline-block'}),
+        ], style={'padding': '20px 20px 20px 20px'})
+    ])
+
+
+app.layout = serve_layout
 
 
 @app.callback(
-    [Output(main_graph, 'figure'),
-     Output('timestamp-label', 'children'),
+    [Output('store', 'data'),
      Output('save-button', 'disabled'),
      Output('save-button', 'className'),
-     Output('data-table', 'data'),
-     Output('data-table', 'columns'),
-     Output('monthly-version', 'max'),
-     Output('monthly-version', 'marks'),
-     Output('month-tab', 'disabled'),
-     ],
-    [Input(plot_type_radio, 'value'),
-     Input(view_type_radio, 'value'),
-     Input(kind_radio, 'value'),
-     State('save-button', 'disabled'),
-     State('save-button', 'className'),
-     State(main_graph, 'figure'),
-     State('data-table', 'data'),
-     State('data-table', 'columns'),
-     State('monthly-version', 'max'),
-     State('monthly-version', 'marks'),
-     State('month-tab', 'disabled'),
+     Output('timestamp-label', 'children'), ],
+    [State('store', 'data'),
+     State('timestamp-label', 'children'),
      Input('update-button', 'n_clicks'),
-     Input('save-button', 'n_clicks'),
-     ]
+     Input('save-button', 'n_clicks')],
+    prevent_initial_call=True
 )
-def update(plot_type, view_type, kind_type, save_disabled, save_class, fig0, data, columns,
-           monthly_version_max, monthly_version_marks, month_tab_disabled, *_):
+def update_or_save_data(data, ts, *_):
+    logging.debug(f'triggered by {ctx.triggered_id}')
+    if not data or not ctx.triggered_id:
+        logging.debug('preventing update')
+        raise PreventUpdate
+
+    unhr = build_unhr(data)
+
     if ctx.triggered_id == 'save-button':
+        logging.debug('persisting data')
         unhr.store()
-        return (fig0, last_date(), True, 'strom-button-disabled', data, columns,
-                monthly_version_max, monthly_version_marks, month_tab_disabled)
-    elif ctx.triggered_id == 'kind':
-        table = output_table(kind_type)
-        return (fig0, last_date(), save_disabled, save_class, table['data'], table['columns'],
-                monthly_version_max, monthly_version_marks, month_tab_disabled)
+        return data, True, 'strom-button-disabled', ts
 
-    if ctx.triggered_id == 'update-button':
-        d = last_date()
-        unhr.update(store=False)
-        save_button_disabled = (d == last_date()) and save_disabled
-        save_class = 'strom-button-disabled' if save_button_disabled else 'button-primary'
-        table = output_table(kind_type)
-        data = table['data']
-        columns = table['columns']
-        monthly_version_max = len(unhr.summary) - 1
-        monthly_version_marks = {i: str(d) for i, d in enumerate(sorted(unhr.summary.keys()))}
-        month_tab_disabled = len(unhr.summary) == 0
-    else:
-        save_button_disabled = save_disabled
+    d = last_date(unhr.data)
 
-    fig = create_graph(PlotType[plot_type],  ## plot_type is labeled by name
-                       ViewType(view_type))  ## view_type is labeled by value
+    logging.debug('updating data from UN')
+    unhr.update(store=False)
+    save_button_disabled = d == last_date(unhr.data)
+    save_button_class = 'strom-button-disabled' if save_button_disabled else 'button-primary'
+    if not save_button_disabled:
+        data = load_data(unhr)  ## reload state
 
-    return (fig, last_date(), save_button_disabled, save_class, data, columns,
-            monthly_version_max, monthly_version_marks, month_tab_disabled)
+    return data, save_button_disabled, save_button_class, last_date(unhr.data)
 
 
-def create_graph(plot_type, view_type):
-    df = unhr.data
+@app.callback(
+    Output(main_graph, 'figure'),
+    [Input('store', 'data'),
+     Input(plot_type_radio, 'value'),
+     Input(view_type_radio, 'value'), ]
+)
+def update_figure(data, plot_type, view_type):
+    logging.debug(f'triggered by {ctx.triggered_id}')
+    return create_graph(PlotType[plot_type],  ## plot_type is labeled by name
+                        ViewType(view_type),  ## view_type is labeled by value
+                        extract_reports(data))
 
+
+@app.callback(
+    [Output('data-table', 'data'),
+     Output('data-table', 'columns')],
+    [Input('store', 'data'),
+     Input(kind_radio, 'value')]
+)
+def update_report_table(data, kind):
+    logging.debug(f'triggered by {ctx.triggered_id}')
+    table = output_table(kind, extract_reports(data))
+    return table['data'], table['columns']
+
+
+@app.callback(
+    [Output('monthly-version', 'max'),
+     Output('monthly-version', 'marks'),
+     Output('monthly-version', 'value'),
+     Output('month-tab', 'disabled')],
+    [Input('store', 'data')]
+)
+def update_monthly_version_slider(data):
+    logging.debug(f'triggered by {ctx.triggered_id}')
+    summary = json.loads(data)['monthly']
+    monthly_version_max = len(summary) - 1
+    monthly_version_marks = {i: str(d) for i, d in enumerate(sorted(summary.keys()))}
+    month_tab_disabled = len(summary) == 0
+    return monthly_version_max, monthly_version_marks, monthly_version_max, month_tab_disabled
+
+
+def create_graph(plot_type, view_type, df):
     if len(df) == 0:
         return px.line()
 
@@ -313,23 +383,26 @@ def create_graph(plot_type, view_type):
 
     else:
 
-        fig = f'Not implemented for {plot_type}'
+        raise NotImplementedError(plot_type)
 
     return fig
 
 
 @app.callback(
     Output('monthly-plot', 'figure'),
-    Input('monthly-version', 'value')
+    [Input('monthly-version', 'value'),
+     State('store', 'data')]
 )
-def update_monthly_plot(version):
+def update_monthly_plot(version, data):
+    logging.debug(f'triggered by {ctx.triggered_id}')
+    summary = extract_monthly(data)
     if version >= 0:
-        version = sorted(unhr.summary.keys())[version]
+        version = sorted(summary.keys())[version]
 
-    if version not in unhr.summary:
+    if version not in summary:
         return px.bar()
 
-    df = unhr.summary[version]
+    df = summary[version]
     df = df[df.Period != 'Total'].copy()
     df.columns = [c[:1].upper() + c[1:] for c in df.columns]  ## capitalize column names
 
@@ -340,12 +413,16 @@ def update_monthly_plot(version):
 
 @app.callback(
     Output('export-csv', 'data'),
-    Input('export-button', 'n_clicks'),
+    [State('store', 'data'),
+     State(kind_radio, 'value'),
+     Input('export-button', 'n_clicks')],
     prevent_initial_call=True
 )
-def export(_):
-    kind = 'killed'
-    df = unhr.data[kind].dropna().reset_index().rename(columns={'index': 'date'})
+def export(data, kind, _):
+    logging.debug(f'triggered by {ctx.triggered_id}')
+
+    data = pd.read_json(json.loads(data)['reports'])
+    df = data[kind].dropna().reset_index().rename(columns={'index': 'date'})
     df['source'] = [UNHR.url_at(d) for d in df.date]
     df['date'] = df.date.dt.date
     return dcc.send_data_frame(df.to_csv, f'{kind}-{df.date.iloc[-1]}.csv')

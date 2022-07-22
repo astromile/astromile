@@ -138,6 +138,9 @@ class DB(DataBean):
             return pd.read_sql_table('report', conn, columns=['date'], index_col='id').date
 
     def add_new_monthly(self, monthly):
+        if len(monthly) == 0:
+            logging.info(msg := 'No monthly data to save')
+            return msg
         db_dates = self.get_report_dates()
         db_monthly = self.get_monthly(db_dates=db_dates)
         monthly['date'] = pd.to_datetime(monthly.date)
