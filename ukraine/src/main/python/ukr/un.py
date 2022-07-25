@@ -36,6 +36,15 @@ class UNHR:
     CMGO = re.compile(fr'(?P<killed>{NEX})\skilled\sand\s(?P<injured>{NEX})\sinjured\sin\s'
                       + fr'(?P<subregions>{NEX})\ssettlements.*?Government')
 
+    PLURAL = {
+        'man': 'men',
+        'woman': 'women',
+        'girl': 'girls',
+        'boy': 'boys',
+        'adult': 'adults',
+        'child': 'children'
+    }
+
     def __init__(self,
                  data_bean: DataBean = FileDataBean(default_root()),
                  load=True):
@@ -50,9 +59,18 @@ class UNHR:
                     for d, g in monthly.groupby('date')
                 }
             self.data = self.data_bean.get_reports()
+            subregions, cm, regional = self.data_bean.get_current_info()
+            self.cm = {
+                'subregions': subregions,
+                'cm': cm,
+                'regional': {pd.to_datetime(d).date(): m.drop(columns='date')
+                             for d, m in regional.groupby('date')} if len(regional) > 0 else {}
+            }
         else:
             self.data = pd.DataFrame()
-        self.cm = {}
+            self.cm = {'subregions': pd.DataFrame(columns=['label', 'rus', 'ukr']),
+                       'cm': pd.DataFrame(),
+                       'regional': {}}
 
     def last(self):
         last_date = self.data.last_valid_index()
@@ -66,13 +84,42 @@ class UNHR:
                 dend=pd.to_datetime('2022-03-07') + pd.Timedelta(days=ndays),
                 silent=silent
             )
+
         else:
             lvi = self.data.last_valid_index()
             data, summary, cm = self.extract_all(dstart=lvi + pd.Timedelta(days=1),
                                                  dend=min(today, lvi + pd.Timedelta(days=ndays)))
             self.data = pd.concat([self.data.loc[:lvi], data], axis=0)
             self.summary |= summary
-            self.cm |= cm
+            subregions = {d: {'label': m['label']} | {c: m['info'][c]['subregions']
+                                                      for c in ['rus', 'ukr']}
+                          for d, m in cm.items()}
+            subregions = pd.DataFrame(subregions).T
+            subregions.index.name = 'date'
+
+            regional = {
+                d: m.get('regional', pd.DataFrame()).rename(columns={
+                    c: c.lower()
+                    for c in m.get('regional', pd.DataFrame()).columns})
+                for d, m in cm.items()
+            }
+
+            cm = {d: {f'{c}_killed': x
+                      for c, x in
+                      [(g, m['info'][g]['killed']) for g in ['rus', 'ukr']] + list(m['info']['killed'].items())} |
+                     {f'{c}_injured': x
+                      for c, x in
+                      [(g, m['info'][g]['injured']) for g in ['rus', 'ukr']] + list(m['info']['injured'].items())}
+                  for d, m in cm.items()}
+            cm = pd.DataFrame(cm).T
+            cm.index.name = 'date'
+            cm.columns = pd.MultiIndex.from_tuples([c.split('_')[::-1] for c in cm.columns])
+
+            if len(subregions) > 0:
+                self.cm['subregions'] = pd.concat([self.cm['subregions'], subregions], axis=0)
+                self.cm['cm'] = pd.concat([self.cm['cm'], cm], axis=0)
+
+            self.cm['regional'] |= regional
 
         if store:
             self.store()
@@ -81,8 +128,15 @@ class UNHR:
 
     def store(self):
         self.data_bean.add_new_reports(self.data)
-
         self.data_bean.add_new_monthly(self.monthly)
+
+        subregions = self.cm['subregions']
+        cm = self.cm['cm']
+        regional = self.cm['regional']
+        regional = pd.concat(regional, axis=0).reset_index().rename(columns={'level_0': 'date'}) \
+            .drop(columns=['level_1'])
+
+        self.data_bean.add_new_current_info(subregions, cm, regional)
 
     @property
     def monthly(self):
@@ -154,14 +208,14 @@ class UNHR:
             data[kind] = {'total': cls.s2n(m.group('total'))}
             dm = cls.DEX.search(m.group('details'))
             while dm:
-                data[kind][dm.group('kind')] = cls.s2n(dm.group('n'))
+                data[kind][cls.PLURAL.get(dm.group('kind'), dm.group('kind'))] = cls.s2n(dm.group('n'))
                 dm = cls.DEX.search(m.group('details'), pos=dm.end())
 
         groups = ['killed', 'injured', 'subregions']
         m = cls.CMRU.search(s, pos=end)
         if m is None:
             return label, data, None
-        end = m.end()
+        # end = m.end()
         data['rus'] = {g: cls.s2n(m.group(g)) for g in groups}
 
         m = cls.CMGO.search(s, pos=end)
@@ -169,7 +223,10 @@ class UNHR:
             return label, data, None
         data['ukr'] = {g: cls.s2n(m.group(g)) for g in groups}
 
-        df = pd.read_html(s[m.end():], match='Region', header=0)[0].drop(columns=['Total'])
+        try:
+            df = pd.read_html(s[m.end():], match='Region', header=0)[0].drop(columns=['Total'])
+        except ValueError:
+            df = pd.DataFrame()
 
         return label, data, df
 
@@ -208,12 +265,12 @@ class UNHR:
             data[kind] = {'total': cls.s2n(m.group('total'))}
             dm = cls.DEX.search(m.group('details'))
             while dm:
-                data[kind][dm.group('kind')] = cls.s2n(dm.group('n'))
+                data[kind][cls.PLURAL.get(dm.group('kind'), dm.group('kind'))] = cls.s2n(dm.group('n'))
                 dm = cls.DEX.search(m.group('details'), pos=dm.end())
 
-        for region, rex in [('DL', cls.DLEX),
-                            ('LDNR', cls.LDNREX),
-                            ('U', cls.UEX)]:
+        for region, rex in [('dl', cls.DLEX),
+                            ('ldnr', cls.LDNREX),
+                            ('u', cls.UEX)]:
             m = rex.search(s, pos=end)
             if m is None:
                 print(s[end:end + 300], region, rex)
@@ -287,8 +344,12 @@ def update():
 
 if __name__ == '__main__':
     init_logging()
+    db = DB()
+    unhr = UNHR(db)
+    unhr.update(store=True)
+    print()
     # UNHR(DB()).update(store=True)
-    DB().add_new_monthly(UNHR().monthly)
+    # DB().add_new_monthly(UNHR().monthly)
     # for c in UNHR().data.columns:
     #     print(c[1] + '_' + c[0], 'INT NOT NULL,')
     # data, monthly, cm = UNHR.extract(pd.to_datetime('2022-07-04'))

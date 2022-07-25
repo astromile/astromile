@@ -7,9 +7,9 @@ import plotly.express as px
 from dash import Dash, html, dcc, Input, Output, State, dash_table, ctx
 from dash.exceptions import PreventUpdate
 
-from ukr.data import DB
+from ukr.data import DB, FileDataBean
 from ukr.un import UNHR
-from ukr.util import init_logging
+from ukr.util import init_logging, default_root
 
 
 class PlotType(enum.Enum):
@@ -45,7 +45,8 @@ server = app.server
 
 init_logging(level=logging.DEBUG)
 
-data_bean = DB()
+# data_bean = DB()
+data_bean = FileDataBean(default_root())
 
 
 def last_date(data):
@@ -99,17 +100,28 @@ def output_table(kind, data):
 
 def load_data(unhr):
     reports = unhr.data.copy()
-    reports.columns = [c[0] + '_' + c[1] for c in reports.columns]
+    DB.flatten_report_columns(reports)
+    monthly = {d.strftime('%Y-%m-%d'): m.to_json()
+               for d, m in unhr.summary.items()}
+
+    cm = unhr.cm['cm'].copy()
+    DB.flatten_report_columns(cm)
+    info = {
+        'subregions': unhr.cm['subregions'].to_json(),
+        'cm': cm.to_json(),
+        'regional': {d.strftime('%Y-%m-%d'): m.to_json() for d, m in unhr.cm['regional'].items()}
+    }
     data = {
         'reports': reports.to_json(),
-        'monthly': {d.strftime('%Y-%m-%d'): m.to_json() for d, m in unhr.summary.items()}
+        'monthly': monthly,
+        'info': info
     }
     return json.dumps(data)
 
 
 def extract_reports(data):
     reports = pd.read_json(json.loads(data)['reports'])
-    reports.columns = pd.MultiIndex.from_tuples([c.split('_') for c in reports.columns])
+    reports.columns = pd.MultiIndex.from_tuples([c.lower().split('_')[::-1] for c in reports.columns])
     return reports
 
 
@@ -123,16 +135,29 @@ def extract_monthly(data):
             for d, m in json.loads(data)['monthly'].items()}
 
 
+def extract_info(data):
+    infos = json.loads(data)['info']
+    return {pd.to_datetime(d).date(): i | {'regional': pd.read_json(i['regional'])}
+            for d, i in infos.items()}
+
+
 def build_unhr(data):
     data = json.loads(data)
     data['reports'] = pd.read_json(data['reports'])
-    data['reports'].columns = pd.MultiIndex.from_tuples([c.split('_') for c in data['reports'].columns])
+    data['reports'].columns = pd.MultiIndex.from_tuples([c.split('_')[::-1] for c in data['reports'].columns])
     data['monthly'] = {pd.to_datetime(d).date(): pd.read_json(m)
                        for d, m in data['monthly'].items()}
+    info = data['info']
+    info['subregions'] = pd.read_json(info['subregions'])
+    info['cm'] = pd.read_json(info['cm'])
+    if len(info['cm']) > 0:
+        info['cm'].columns = pd.MultiIndex.from_tuples([c.split('_')[::-1] for c in info['cm'].columns])
+    info['regional'] = {pd.to_datetime(d).date(): pd.read_json(m) for d, m in info['regional'].items()}
 
     unhr = UNHR(data_bean=data_bean, load=False)
     unhr.data = data['reports']
     unhr.summary = data['monthly']
+    unhr.cm = data['info']
     return unhr
 
 
@@ -301,6 +326,7 @@ def create_graph(plot_type, view_type, df):
         return px.line()
 
     if ViewType.is_daily(view_type):
+        df = df.reindex(pd.date_range(df.index[0], df.index[-1]))
         df = df.loc[:df.last_valid_index()].astype(float).interpolate().diff()
         if view_type == ViewType.MA7d:
             df = df.rolling('7D').mean()
@@ -309,7 +335,7 @@ def create_graph(plot_type, view_type, df):
 
     kinds = ['killed', 'injured']
     dk = ['date', 'kind']
-    cols_geo = ['DL', 'U', 'LDNR']
+    cols_geo = ['dl', 'u', 'ldnr']
     cols_gender = {'m': ['men', 'boys'], 'f': ['women', 'girls'], 'u': ['adults', 'children']}
     cols_age = {'adults_total': ['men', 'women', 'adults'], 'children_total': ['boys', 'girls', 'children']}
 
@@ -420,8 +446,7 @@ def update_monthly_plot(version, data):
 )
 def export(data, kind, _):
     logging.debug(f'triggered by {ctx.triggered_id}')
-
-    data = pd.read_json(json.loads(data)['reports'])
+    data = extract_reports(data)
     df = data[kind].dropna().reset_index().rename(columns={'index': 'date'})
     df['source'] = [UNHR.url_at(d) for d in df.date]
     df['date'] = df.date.dt.date
