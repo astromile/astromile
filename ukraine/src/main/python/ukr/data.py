@@ -75,10 +75,10 @@ class FileDataBean(DataBean):
             cm = pd.read_csv(last)
 
         if len(cm) > 0:
+            cm.set_index('date', inplace=True)
             aux_cols = ['label', 'rus_subregions', 'ukr_subregions']
             subregions = cm[aux_cols].rename(columns={c: c.split('_')[0] for c in aux_cols[1:]})
             cm.drop(columns=aux_cols, inplace=True)
-            cm.set_index('date', inplace=True)
             cm.columns = pd.MultiIndex.from_tuples([c.split('_')[::-1] for c in cm.columns])
         else:
             subregions = pd.DataFrame()

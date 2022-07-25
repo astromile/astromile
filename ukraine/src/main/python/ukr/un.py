@@ -113,9 +113,9 @@ class UNHR:
                   for d, m in cm.items()}
             cm = pd.DataFrame(cm).T
             cm.index.name = 'date'
-            cm.columns = pd.MultiIndex.from_tuples([c.split('_')[::-1] for c in cm.columns])
 
             if len(subregions) > 0:
+                cm.columns = pd.MultiIndex.from_tuples([c.split('_')[::-1] for c in cm.columns])
                 self.cm['subregions'] = pd.concat([self.cm['subregions'], subregions], axis=0)
                 self.cm['cm'] = pd.concat([self.cm['cm'], cm], axis=0)
 

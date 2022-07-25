@@ -136,9 +136,14 @@ def extract_monthly(data):
 
 
 def extract_info(data):
-    infos = json.loads(data)['info']
-    return {pd.to_datetime(d).date(): i | {'regional': pd.read_json(i['regional'])}
-            for d, i in infos.items()}
+    info = json.loads(data)['info']
+    info['subregions'] = pd.read_json(info['subregions'])
+    info['cm'] = pd.read_json(info['cm'])
+    info['cm'].columns = pd.MultiIndex.from_tuples([c.split('_')[::-1]
+                                                    for c in info['cm'].columns])
+    info['regional'] = {pd.to_datetime(d).date(): pd.read_json(m)
+                        for d, m in info['regional'].items()}
+    return info
 
 
 def build_unhr(data):
@@ -210,11 +215,31 @@ def serve_layout():
                         dcc.Slider(min=0, max=len(unhr.summary) - 1, step=1, value=len(unhr.summary) - 1,
                                    marks={i: str(d) for i, d in enumerate(sorted(unhr.summary.keys()))},
                                    id='monthly-version', vertical=True)
-                    ], style={'minWidth': '83px', 'width': '15%', 'display': 'inline-block',
+                    ], style={'minWidth': '98px', 'width': '15%', 'display': 'inline-block',
                               'verticalAlign': 'middle'}),
 
                     html.Div([dcc.Graph(
                         id='monthly-plot',
+                        style={'height': '700px'},
+                        config={"displaylogo": False}
+                    )],
+                        style={'width': '83%', 'display': 'inline-block', 'padding': '0 20',
+                               'verticalAlign': 'middle'}),
+
+                    html.Div([
+                        dcc.RadioItems(options=[PlotType.Geo.name, PlotType.Gender_Age.name],
+                                       value=PlotType.Geo.name,
+                                       id='cm-plot-type',
+                                       labelStyle={'display': 'inline-block', 'marginTop': '5px', 'color': '#ffcc00'})
+                    ], style={'backgroundColor': '#0066cc'}),
+
+                    html.Div([
+                        # placeholder
+                    ], style={'minWidth': '98px', 'width': '15%', 'display': 'inline-block',
+                              'verticalAlign': 'middle'}, hidden=True),
+
+                    html.Div([dcc.Graph(
+                        id='current-month-plot',
                         style={'height': '700px'},
                         config={"displaylogo": False}
                     )],
@@ -451,6 +476,37 @@ def export(data, kind, _):
     df['source'] = [UNHR.url_at(d) for d in df.date]
     df['date'] = df.date.dt.date
     return dcc.send_data_frame(df.to_csv, f'{kind}-{df.date.iloc[-1]}.csv')
+
+
+@app.callback(
+    Output('current-month-plot', 'figure'),
+    [Input('monthly-version', 'value'),
+     Input('cm-plot-type', 'value'),
+     State('store', 'data')]
+)
+def update_cm_plot(version, plot_type, data):
+    logging.debug(f'triggered by {ctx.triggered_id}')
+    info = extract_info(data)
+    if version >= 0:
+        version = info['subregions'].iloc[version].name
+
+    if version not in info['cm'].index:
+        return px.bar()
+
+    df = info['cm'][info['cm'].index == version].stack(level=0).droplevel(0).T.reset_index().rename(
+        columns={'index': 'kind'})
+    if plot_type == PlotType.Geo.name:
+        x = 'Controlled by'
+        df = df[df.kind.isin(['rus', 'ukr'])].rename(columns={'kind': x})
+    else:
+        x = 'kind'
+        df = df[~df.kind.isin(['rus', 'ukr', 'total'])].sort_values('killed', ascending=False)
+
+    label = ' '.join(info['subregions'].loc[version, 'label'].split('-')[::-1])
+    title = f'1-{label}'
+    fig = px.bar(df, x=x, y=['injured', 'killed'], barmode='group', title=title)
+
+    return fig
 
 
 if __name__ == '__main__':
